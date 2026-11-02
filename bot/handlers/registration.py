@@ -56,9 +56,12 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
             f" Kerakli bo'limni tanlang va qulay xarid qiling."
         )
 
-        if os.path.exists(MAIN_MENU_BANNER):
-            await message.answer_photo(photo=FSInputFile(MAIN_MENU_BANNER), caption=text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
-        else:
+        try:
+            if os.path.exists(MAIN_MENU_BANNER):
+                await message.answer_photo(photo=FSInputFile(MAIN_MENU_BANNER), caption=text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
+            else:
+                await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
+        except Exception:
             await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
         return
 

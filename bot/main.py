@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from core.config import config
 from core.logger import logger
 from db.database import async_session
@@ -32,8 +33,10 @@ async def main():
     # Images papkasini yaratish (agar yo'q bo'lsa)
     os.makedirs("bot/images", exist_ok=True)
 
+    session = AiohttpSession(timeout=60.0)
     bot = Bot(
         token=config.BOT_TOKEN.get_secret_value(),
+        session=session,
         default=DefaultBotProperties(parse_mode="HTML")
     )
     dp = Dispatcher()
