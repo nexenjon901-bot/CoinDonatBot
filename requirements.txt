@@ -1,0 +1,10 @@
+aiogram>=3.4.1
+pydantic>=2.6.4
+pydantic-settings>=2.2.1
+SQLAlchemy>=2.0.29
+asyncpg>=0.29.0
+alembic>=1.13.1
+fluent.runtime>=0.4.0
+cryptography>=42.0.5
+python-dotenv>=1.0.1
+redis>=5.0.3
