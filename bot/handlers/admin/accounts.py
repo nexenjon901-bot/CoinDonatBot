@@ -66,18 +66,42 @@ async def process_category_emoji(message: Message, state: FSMContext, session: A
     name = data.get("name")
 
     emoji_str = None
+    emoji_id = None
+
     if message.text != "/skip":
-        # Premium emoji bo'lsa `message.entities` ichida custom_emoji_id kelishi mumkin.
-        # Bu yerda oddiy qilib textni (emojini o'zini) olamiz. (Telegram API orqali HTML formatda ko'rsatish mumkin)
-        emoji_str = message.text.strip()
+        # Premium (custom) emoji bolsa message.entities ichida custom_emoji tipida keladi
+        if message.entities:
+            for entity in message.entities:
+                if entity.type == "custom_emoji":
+                    emoji_id = entity.custom_emoji_id
+                    # Fallback uchun original char ni olamiz
+                    emoji_str = message.text[entity.offset: entity.offset + entity.length]
+                    break
+
+        # Agar custom emoji topilmasa - oddiy text/emoji ishlatiladi
+        if not emoji_str:
+            emoji_str = message.text.strip()
 
     cat = Category(name=name, emoji=emoji_str, order_index=0, is_active=True)
     session.add(cat)
     await session.commit()
+
+    # emoji_id ni alohida saqlaymiz (agar mavjud bolsa)
+    if emoji_id:
+        from sqlalchemy import text as sql_text
+        await session.execute(
+            sql_text("UPDATE categories SET emoji_id = :eid WHERE id = :cid"),
+            {"eid": emoji_id, "cid": cat.id}
+        )
+        await session.commit()
+
     await state.clear()
 
     emoji_disp = f"{emoji_str} " if emoji_str else ""
-    await message.answer(f"✅ Kategoriya qo'shildi: <b>{emoji_disp}{name}</b> (ID: #{cat.id})")
+    eid_note = f"\n🌟 Premium emoji ID: <code>{emoji_id}</code>" if emoji_id else ""
+    await message.answer(
+        f"✅ Kategoriya qoshildi: <b>{emoji_disp}{name}</b> (ID: #{cat.id}){eid_note}"
+    )
 
 
 @router.callback_query(F.data.startswith("admin_cat_toggle_"))

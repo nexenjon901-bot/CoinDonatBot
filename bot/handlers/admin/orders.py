@@ -11,7 +11,7 @@ from db.models.product import Product
 from db.models.user import User
 from bot.filters.admin import IsAdmin
 from core.config import config
-from core.utils import format_money
+from core.utils import format_money, premium_emoji
 from services.wallet import credit, TransactionType
 
 router = Router()
@@ -42,9 +42,10 @@ async def list_pending_orders(message: Message, session: AsyncSession):
         prod_title = order.product.name if order.product else (f"Akkaunt #{order.account_id}" if order.account_id else "Noma'lum")
         buyer = f"@{order.user.username}" if order.user and order.user.username else f"ID: {order.user_id}"
 
+        icon = premium_emoji("5368324170671202286", "💎") if is_uc else "🎮"
         text_msg = (
             f"🧾 <b>Buyurtma:</b> <code>{order.order_number}</code>\n"
-            f"🎮 <b>Mahsulot:</b> {prod_title}\n"
+            f"{icon} <b>Mahsulot:</b> {prod_title}\n"
             f"👤 <b>Xaridor:</b> {buyer}\n"
             f"💰 <b>Summa:</b> {format_money(order.price)}\n"
             f"📅 <b>Sana:</b> {order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else ''}\n"

@@ -7,7 +7,7 @@ from typing import Callable
 import os
 from decimal import Decimal
 
-from core.utils import format_money
+from core.utils import format_money, premium_emoji
 from services.wallet import debit, TransactionType, InsufficientFunds
 from sqlalchemy import text
 
@@ -111,7 +111,8 @@ async def show_category_products(callback: CallbackQuery, session: AsyncSession)
     products = prods_result.scalars().all()
 
     keyboard = get_products_keyboard(products, cat_id)
-    text = f"🛍 <b>Do'kon</b>\n\n🎮 <b>{cat.name}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
+    cat_emoji = premium_emoji(cat.emoji_id, cat.emoji or "🎮") if getattr(cat, "emoji_id", None) else (cat.emoji or "🎮")
+    text = f"🛍 <b>Do'kon</b>\n\n{cat_emoji} <b>{cat.name}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
 
     from aiogram.types import InputMediaPhoto
     media_file = cat.image_file_id if cat.image_file_id else FSInputFile(SHOP_BANNER)
@@ -149,9 +150,11 @@ async def show_product_detail(callback: CallbackQuery, session: AsyncSession):
     status_text = f"{prod.quantity} dona" if prod.quantity > 0 else "Mavjud emas"
     description = prod.description or "Avtomatik yetkazib berish."
 
+    is_uc_prod = getattr(prod, "product_type", "account") == "uc"
+    prod_icon = premium_emoji("5368324170671202286", "💎") if is_uc_prod else "🎮"
     text = (
         f"🛍 <b>Do'kon</b>\n\n"
-        f"🎮 <b>{prod.name}</b>\n\n"
+        f"{prod_icon} <b>{prod.name}</b>\n\n"
         f"💰 Narxi: <b>{prod.price_uzs:,.0f} so'm ({price_usd})</b>\n"
         f"📦 Mavjud: <b>{status_text}</b>\n"
         f"📝 Tavsif: <i>{description}</i>\n\n"
@@ -206,7 +209,8 @@ async def back_to_product_list(callback: CallbackQuery, session: AsyncSession):
     cat = await session.get(Category, cat_id)
 
     keyboard = get_products_keyboard(products, cat_id)
-    text = f"🛍 <b>Do'kon</b>\n\n🎮 <b>{cat.name if cat else 'Kategoriya'}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
+    cat_emoji_b = premium_emoji(cat.emoji_id, cat.emoji or "🎮") if cat and getattr(cat, "emoji_id", None) else (cat.emoji if cat else "🎮")
+    text = f"🛍 <b>Do'kon</b>\n\n{cat_emoji_b} <b>{cat.name if cat else 'Kategoriya'}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
 
     from aiogram.types import InputMediaPhoto
     media_file = cat.image_file_id if (cat and cat.image_file_id) else FSInputFile(SHOP_BANNER)

@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -9,6 +9,8 @@ import os
 
 from db.models.user import User
 from db.models.order import Order, OrderStatus
+from db.models.product import Product
+from core.utils import format_money, premium_emoji, order_status_label
 
 router = Router()
 
@@ -124,26 +126,27 @@ async def show_orders_history(callback: CallbackQuery, session: AsyncSession, db
     if not orders:
         text = "📋 <b>Buyurtmalar tarixi</b>\n\nSiz hali hech narsa sotib olmadingiz."
     else:
-        lines = ["📋 <b>Buyurtmalar tarixi</b>\n\nMa'lumotlarni ko'rish uchun quyidagi tugmalardan birini tanlang:\n"]
+        lines = ["📋 <b>Buyurtmalar tarixi</b>\n\nSo'nggi 10 ta buyurtmangiz:\n"]
         for o in orders:
             date = o.created_at.strftime("%d.%m.%Y") if o.created_at else "—"
+            status_val = o.status.value if o.status else ""
             status_icons = {
                 "COMPLETED": "✅", "CANCELLED": "❌", "REJECTED": "❌",
-                "PAYMENT_REVIEW": "⏳", "APPROVED": "✔️", "PENDING_PAYMENT": "⏳",
+                "PAYMENT_REVIEW": "⏳", "APPROVED": "🔄", "PENDING_PAYMENT": "⏳",
                 "DELIVERY_FAILED": "⚠️"
             }
-            icon = status_icons.get(o.status.value if o.status else "", "❓")
+            icon = status_icons.get(status_val, "❓")
             lines.append(f"{icon} <code>{o.order_number}</code> — {float(o.price):,.0f} so'm — {date}")
             
-            # Add button for this order
+            # Har bir buyurtma uchun tugma
             builder.button(text=f"{icon} {o.order_number}", callback_data=f"order_view_{o.id}")
             
         text = "\n".join(lines)
 
-    # Adjust buttons 2 per row
+    # 2 ta tugma qatoriga joylashtirish
     builder.adjust(2)
-    # Add back button on its own row
-    builder.row(InlineKeyboardBuilder().button(text="↩️ Orqaga", callback_data="profile_back_detail").as_markup().inline_keyboard[0])
+    # Orqaga tugmasi alohida qatorga
+    builder.button(text="↩️ Orqaga", callback_data="profile_back_detail")
 
     try:
         await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
@@ -151,49 +154,105 @@ async def show_orders_history(callback: CallbackQuery, session: AsyncSession, db
         await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
     await callback.answer()
 
+
 @router.callback_query(F.data.startswith("order_view_"))
 async def view_order_details(callback: CallbackQuery, session: AsyncSession, db_user: User):
-    order_id = int(callback.data.split("_")[2])
-    
-    # Check order belongs to user
+    """Buyurtma tafsilotlari — UC va akkaunt buyurtmalarini to'g'ri ko'rsatadi"""
+    try:
+        order_id = int(callback.data.split("_")[2])
+    except (IndexError, ValueError):
+        await callback.answer("Noto'g'ri buyurtma!", show_alert=True)
+        return
+
+    # Buyurtma foydalanuvchiga tegishliligini tekshirish
     order = await session.get(Order, order_id)
     if not order or order.user_id != db_user.id:
         await callback.answer("Buyurtma topilmadi!", show_alert=True)
         return
-        
-    from sqlalchemy import text
+
     from core.security import decrypt_text
-    from core.utils import format_money
-    
-    res = await session.execute(
-        text("SELECT data_encrypted FROM stock_items WHERE order_id = :oid"),
-        {"oid": order_id}
-    )
-    row = res.fetchone()
-    
-    if not row:
-        await callback.answer("Ma'lumot topilmadi (eski tizimdagi buyurtma bo'lishi mumkin).", show_alert=True)
-        return
-        
-    try:
-        decrypted_data = decrypt_text(row[0])
-    except Exception:
-        decrypted_data = "Ma'lumotni o'qishda xatolik yuz berdi."
-        
-    text_msg = (
-        f"🧾 <b>Buyurtma:</b> <code>{order.order_number}</code>\n"
-        f"💰 <b>Narxi:</b> {format_money(order.price)}\n\n"
-        f"🔑 <b>Sizning ma'lumotlaringiz:</b>\n"
-        f"<code>{decrypted_data}</code>"
-    )
-    
+
+    # Mahsulotni yuklaymiz
+    prod = await session.get(Product, order.product_id) if order.product_id else None
+    prod_name = prod.name if prod else f"Buyurtma #{order.order_number}"
+
+    # UC yoki akkaunt ekanligini aniqlash
+    is_uc = False
+    if prod and getattr(prod, 'product_type', 'account') == 'uc':
+        is_uc = True
+    elif order.player_id:
+        # Agar player_id mavjud bo'lsa — UC buyurtmasi
+        is_uc = True
+
+    # Holat matni
+    status_val = order.status.value if order.status else "UNKNOWN"
+    status_text = order_status_label(status_val)
+
+    # Narxi va sanasi
+    price_str = format_money(order.price)
+    date_str = order.created_at.strftime("%d.%m.%Y %H:%M") if order.created_at else "—"
+
+    if is_uc:
+        # ═══ UC buyurtmasi — player_id orqali ═══
+        player_id_str = order.player_id or "Kiritilmagan"
+
+        # Premium emoji qo'llash (UC uchun 💎)
+        uc_icon = premium_emoji("5368324170671202286", "💎")
+
+        text_msg = (
+            f"🧾 <b>Buyurtma tafsiloti</b>\n\n"
+            f"📌 <b>Raqam:</b> <code>{order.order_number}</code>\n"
+            f"{uc_icon} <b>Mahsulot:</b> {prod_name}\n"
+            f"🆔 <b>PUBG Player ID:</b> <code>{player_id_str}</code>\n"
+            f"💰 <b>Narxi:</b> {price_str}\n"
+            f"📅 <b>Sana:</b> {date_str}\n"
+            f"📌 <b>Holat:</b> {status_text}\n\n"
+            f"<i>UC qo'shilganda holat 'Bajarildi' ga o'zgaradi.</i>"
+        )
+    else:
+        # ═══ Akkaunt buyurtmasi — stock_items dan ═══
+        res = await session.execute(
+            text("SELECT data_encrypted FROM stock_items WHERE order_id = :oid"),
+            {"oid": order_id}
+        )
+        row = res.fetchone()
+
+        if not row:
+            # Eski tizim yoki ma'lumot yo'q
+            text_msg = (
+                f"🧾 <b>Buyurtma:</b> <code>{order.order_number}</code>\n"
+                f"🎮 <b>Mahsulot:</b> {prod_name}\n"
+                f"💰 <b>Narxi:</b> {price_str}\n"
+                f"📅 <b>Sana:</b> {date_str}\n"
+                f"📌 <b>Holat:</b> {status_text}\n\n"
+                f"⚠️ <i>Akkaunt ma'lumotlari topilmadi. Admin bilan bog'laning.</i>"
+            )
+        else:
+            try:
+                decrypted_data = decrypt_text(row[0])
+            except Exception:
+                decrypted_data = "Ma'lumotni o'qishda xatolik yuz berdi."
+
+            text_msg = (
+                f"🧾 <b>Buyurtma:</b> <code>{order.order_number}</code>\n"
+                f"🎮 <b>Mahsulot:</b> {prod_name}\n"
+                f"💰 <b>Narxi:</b> {price_str}\n"
+                f"📅 <b>Sana:</b> {date_str}\n"
+                f"📌 <b>Holat:</b> {status_text}\n\n"
+                f"🔑 <b>Akkaunt ma'lumotlari:</b>\n"
+                f"<code>{decrypted_data}</code>"
+            )
+
     builder = InlineKeyboardBuilder()
     builder.button(text="↩️ Orqaga", callback_data="profile_orders")
-    
+
     try:
         await callback.message.edit_caption(caption=text_msg, reply_markup=builder.as_markup())
     except Exception:
-        await callback.message.edit_text(text=text_msg, reply_markup=builder.as_markup())
+        try:
+            await callback.message.edit_text(text=text_msg, reply_markup=builder.as_markup())
+        except Exception:
+            await callback.message.answer(text_msg, reply_markup=builder.as_markup())
     await callback.answer()
 
 

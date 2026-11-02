@@ -9,8 +9,10 @@ class Category(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    # Premium emoji (custom emoji id yoki oddiy emoji)
+    # Standart emoji yoki fallback (masalan: 🎮, 💎)
     emoji = Column(String(255), nullable=True)
+    # Telegram Premium custom_emoji_id
+    emoji_id = Column(String(255), nullable=True)
     # Telegram file_id (banner rasm)
     image_file_id = Column(String(255), nullable=True)
     order_index = Column(Integer, default=0)
