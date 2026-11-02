@@ -15,6 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Run database migrations first if necessary (optional) or just run the bot
-# CMD ["sh", "-c", "python init_db.py && python -m bot.main"]
+RUN mkdir -p /app/logs /app/bot/images
+
 CMD ["python", "-m", "bot.main"]
