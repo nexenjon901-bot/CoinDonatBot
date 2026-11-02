@@ -9,7 +9,6 @@ if str(ROOT) not in sys.path:
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
 from core.config import config
 from core.logger import logger
 from db.database import async_session
@@ -27,19 +26,10 @@ from bot.handlers.orders import router as orders_router
 from bot.handlers.admin import router as admin_router
 
 
-async def main():
-    logger.info("Bot ishga tushirilmoqda...")
-
+async def start_bot():
     os.makedirs("bot/images", exist_ok=True)
 
-    session = AiohttpSession(timeout=30.0)
-    bot = Bot(
-        token=config.BOT_TOKEN.get_secret_value(),
-        session=session,
-        default=DefaultBotProperties(parse_mode="HTML")
-    )
     dp = Dispatcher()
-
     dp.update.outer_middleware(DbSessionMiddleware(async_session))
     dp.update.outer_middleware(I18nMiddleware())
 
@@ -54,17 +44,32 @@ async def main():
     dp.include_router(admin_router)
 
     while True:
+        bot = Bot(
+            token=config.BOT_TOKEN.get_secret_value(),
+            default=DefaultBotProperties(parse_mode="HTML")
+        )
         try:
-            try:
-                await bot.delete_webhook(drop_pending_updates=True)
-            except Exception as e:
-                logger.warning(f"Webhook o'chirishda ogohlantirish: {e}")
-            logger.info("Telegram bilan ulanish o'rnatildi, polling boshlandi...")
+            me = await bot.get_me()
+            logger.info(f"Botga ulandi: @{me.username} (ID: {me.id})")
+            await bot.delete_webhook(drop_pending_updates=True)
+            logger.info("Polling boshlandi...")
             await dp.start_polling(bot, handle_signals=False)
         except Exception as e:
-            logger.error(f"Tarmoq yoki ulanish xatosi: {e}. 3 soniyadan so'ng qayta uriniladi...")
+            logger.error(f"Ulanish yoki polling xatosi: {e}. 3 soniyadan so'ng qayta ulanadi...")
             await asyncio.sleep(3)
+        finally:
+            try:
+                await bot.session.close()
+            except Exception:
+                pass
+
+
+def main():
+    try:
+        asyncio.run(start_bot())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot to'xtatildi.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
