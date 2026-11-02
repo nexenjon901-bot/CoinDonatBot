@@ -30,10 +30,9 @@ from bot.handlers.admin import router as admin_router
 async def main():
     logger.info("Bot ishga tushirilmoqda...")
 
-    # Images papkasini yaratish (agar yo'q bo'lsa)
     os.makedirs("bot/images", exist_ok=True)
 
-    session = AiohttpSession(timeout=60.0)
+    session = AiohttpSession(timeout=30.0)
     bot = Bot(
         token=config.BOT_TOKEN.get_secret_value(),
         session=session,
@@ -54,8 +53,17 @@ async def main():
     dp.include_router(orders_router)
     dp.include_router(admin_router)
 
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    while True:
+        try:
+            try:
+                await bot.delete_webhook(drop_pending_updates=True)
+            except Exception as e:
+                logger.warning(f"Webhook o'chirishda ogohlantirish: {e}")
+            logger.info("Telegram bilan ulanish o'rnatildi, polling boshlandi...")
+            await dp.start_polling(bot, handle_signals=False)
+        except Exception as e:
+            logger.error(f"Tarmoq yoki ulanish xatosi: {e}. 3 soniyadan so'ng qayta uriniladi...")
+            await asyncio.sleep(3)
 
 
 if __name__ == "__main__":
