@@ -201,8 +201,9 @@ async def product_detail_admin(callback: CallbackQuery, session: AsyncSession):
         return
 
     builder = InlineKeyboardBuilder()
+    btn_text = "❌ O'chirish" if prod.is_active else "✅ Faollashtirish"
     builder.button(
-        text=f"{'❌ O\'chirish' if prod.is_active else '✅ Faollashtirish'}",
+        text=btn_text,
         callback_data=f"admin_prod_toggle_{prod_id}"
     )
     builder.button(text="📦 Stok qo'shish",
@@ -212,12 +213,13 @@ async def product_detail_admin(callback: CallbackQuery, session: AsyncSession):
     builder.adjust(1)
 
     price_usd = f"${prod.price_usd:.2f}" if prod.price_usd else "—"
+    status_label = "Faol ✅" if prod.is_active else "O'chirilgan ❌"
     text = (
         f"🛍 <b>{prod.name}</b>\n\n"
         f"💰 Narxi: {float(prod.price_uzs):,.0f} so'm ({price_usd})\n"
         f"📦 Stok: {prod.quantity} dona\n"
         f"📝 Tavsif: {prod.description or '—'}\n"
-        f"🔘 Holati: {'Faol ✅' if prod.is_active else 'O\'chirilgan ❌'}"
+        f"🔘 Holati: {status_label}"
     )
     try:
         await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
