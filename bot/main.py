@@ -28,6 +28,15 @@ from bot.handlers.admin import router as admin_router
 async def start_bot():
     os.makedirs("bot/images", exist_ok=True)
 
+    # Bazadagi jadvallarni avtomatik tekshirish va yaratish
+    try:
+        from init_db import init_db
+        logger.info("Ma'lumotlar bazasi jadvallarini tekshirish va yaratish...")
+        await init_db()
+        logger.info("Baza jadvallari muvaffaqiyatli tayyorlandi!")
+    except Exception as e:
+        logger.error(f"Bazani initsializatsiya qilishda xatolik: {e}")
+
     dp = Dispatcher()
     dp.update.outer_middleware(DbSessionMiddleware(async_session))
     dp.update.outer_middleware(I18nMiddleware())
