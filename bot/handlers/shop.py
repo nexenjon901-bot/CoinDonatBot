@@ -641,7 +641,7 @@ async def back_to_main(callback: CallbackQuery):
 
     text = (
         "👋 <b>Asosiy menyu</b>\n\n"
-        "🛍 <b>ENTELLI STORE</b> — PUBG Mobile UC va o'yin akkauntlari do'koni boti!"
+        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
     )
     try:
         await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))

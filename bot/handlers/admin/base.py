@@ -16,7 +16,7 @@ router.callback_query.filter(IsAdmin())
 
 
 def get_admin_keyboard() -> ReplyKeyboardMarkup:
-    """Admin panel asosiy klaviaturasi — storechookie_bot uslubi"""
+    """Admin panel asosiy klaviaturasi — CoinDonatBot uslubi"""
     rows = [
         [KeyboardButton(text="📊 Statistika"),
          KeyboardButton(text="👥 Foydalanuvchilar")],

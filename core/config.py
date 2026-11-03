@@ -18,13 +18,17 @@ class Settings(BaseSettings):
     PAYMENT_CARD: str = "8600 0000 0000 0000"       # Karta raqami
     PAYMENT_CARD_OWNER: str = "Karta egasi"          # Karta egasining ismi
     PAYMENT_PHONE: str = ""                          # To'lov rekvizitlari telefoni
-    SUPPORT_URL: str = "https://t.me/entelli_sale" # Qo'llab-quvvatlash havolasi
+    SUPPORT_URL: str = "https://t.me/coindonat_support" # Qo'llab-quvvatlash havolasi
+    DISCOUNTS_CHANNEL_URL: str = "https://t.me/coindonat_support"                  # Chegirmalar kanali havolasi
+
+    # Valyuta kursi
+    USD_RATE: int = 11880                            # USD kursi (so'm/$)
 
     # Referal tizimi
     REFERRAL_BONUS_UZS: int = 2000                   # Referal bonusi (UZS)
 
     # Bot nomi (xabarlarda ko'rinadi)
-    BOT_USERNAME: str = "entellibot"
+    BOT_USERNAME: str = "coindonatbot"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8")

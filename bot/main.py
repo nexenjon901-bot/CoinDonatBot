@@ -22,7 +22,6 @@ from bot.handlers.balance import router as balance_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.referral import router as referral_router
 from bot.handlers.useful import router as useful_router
-from bot.handlers.orders import router as orders_router
 from bot.handlers.admin import router as admin_router
 
 
@@ -40,7 +39,6 @@ async def start_bot():
     dp.include_router(profile_router)
     dp.include_router(referral_router)
     dp.include_router(useful_router)
-    dp.include_router(orders_router)
     dp.include_router(admin_router)
 
     while True:
@@ -53,7 +51,12 @@ async def start_bot():
             logger.info(f"Botga ulandi: @{me.username} (ID: {me.id})")
             await bot.delete_webhook(drop_pending_updates=True)
             logger.info("Polling boshlandi...")
-            await dp.start_polling(bot, handle_signals=False)
+            await dp.start_polling(
+                bot,
+                handle_signals=False,
+                polling_timeout=20,
+                allowed_updates=["message", "callback_query"]
+            )
         except Exception as e:
             logger.error(f"Ulanish yoki polling xatosi: {e}. 3 soniyadan so'ng qayta ulanadi...")
             await asyncio.sleep(3)

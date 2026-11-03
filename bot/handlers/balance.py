@@ -6,6 +6,7 @@ from sqlalchemy import select
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import Callable
 import os
+import random
 
 from bot.states.balance import BalanceFill
 from core.logger import logger
@@ -16,17 +17,15 @@ from core.config import config
 router = Router()
 
 BALANCE_BANNER = "bot/images/balance.png"
-MIN_AMOUNT = 10_000  # Minimal to'lov (UZS)
+MIN_AMOUNT = 10_000  # Minimal to'ldirish summasi (UZS)
 
 
 async def _send_balance_menu(target, text: str, keyboard):
     """Banner bilan yoki bansiz xabar yuborish"""
     banner_path = BALANCE_BANNER
     if isinstance(target, Message):
-        if os.path.exists(banner_path):
-            await target.answer_photo(photo=FSInputFile(banner_path), caption=text, reply_markup=keyboard)
-        else:
-            await target.answer(text, reply_markup=keyboard)
+        from core.ui import answer_with_banner
+        await answer_with_banner(target, banner_path, text, keyboard)
     else:  # CallbackQuery
         try:
             await target.message.edit_caption(caption=text, reply_markup=keyboard)
@@ -35,7 +34,7 @@ async def _send_balance_menu(target, text: str, keyboard):
 
 
 # ───────────────────────────────────────────
-# BALANS TO'LDIRISH — Asosiy
+# HISOBNI TO'LDIRISH — Asosiy
 # ───────────────────────────────────────────
 
 async def show_balance_menu(message: Message, db_user: User):
@@ -46,9 +45,9 @@ async def show_balance_menu(message: Message, db_user: User):
     builder.adjust(1)
 
     text = (
-        f"💰 <b>Balansni to'ldirish</b>\n\n"
+        f"💸 <b>Hisobni to'ldirish</b>\n\n"
         f"Hisobingizni to'ldirish uchun qulay to'lov usulini tanlang.\n"
-        f"Minimal to'lov: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
+        f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
         f"💳 Joriy balans: <b>{float(db_user.balance or 0):,.0f} so'm</b>\n\n"
         f"<i>To'lov turini tanlang:</i>"
     )
@@ -67,10 +66,10 @@ async def ask_balance_amount(callback: CallbackQuery, state: FSMContext):
     builder.adjust(1)
 
     text = (
-        f"💰 <b>Balansni to'ldirish</b>\n\n"
+        f"💸 <b>Hisobni to'ldirish</b>\n\n"
         f"💳 <b>Karta orqali (Chek yuborish)</b>\n\n"
         f"Qancha miqdorda to'ldirmoqchisiz?\n"
-        f"Minimal miqdor: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
+        f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
         f"Miqdorni raqamda kiriting (masalan: <code>50000</code>):"
     )
 
@@ -92,10 +91,14 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
 
     amount = int(text_raw)
     if amount < MIN_AMOUNT:
-        await message.answer(f"❌ Minimal to'lov miqdori: <b>{MIN_AMOUNT:,} so'm</b>\nBoshqa miqdor kiriting:")
+        await message.answer(f"❌ Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\nBoshqa miqdor kiriting:")
         return
 
-    await state.update_data(amount=amount)
+    # Noyob summa: asosiy summaga tasodifiy 2 xonali tiyinlar qo'shish
+    random_cents = random.randint(1, 99)
+    display_amount = f"{amount:,},{random_cents:02d} so'm"
+
+    await state.update_data(amount=amount, display_amount=display_amount)
 
     # Karta ma'lumotlarini DB dan olish
     from db.models.setting import Setting, SettingKeys
@@ -107,17 +110,22 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
     owner_obj = owner_res.scalar_one_or_none()
     card_owner = owner_obj.value if owner_obj else config.PAYMENT_CARD_OWNER
 
+    phone_res = await session.execute(select(Setting).where(Setting.key == SettingKeys.PAYMENT_PHONE))
+    phone_obj = phone_res.scalar_one_or_none()
+    phone = phone_obj.value if phone_obj else getattr(config, "PAYMENT_PHONE", "")
+
     builder = InlineKeyboardBuilder()
     builder.button(text="❌ Bekor qilish", callback_data="balance_cancel_state")
     builder.adjust(1)
 
     text = (
-        f"💰 <b>Balansni to'ldirish</b>\n\n"
-        f"💳 <b>Karta raqami:</b>\n"
-        f"<code>{card_number}</code>\n"
-        f"<b>Karta egasi:</b> {card_owner}\n\n"
-        f"💵 <b>To'lanadigan summa: {amount:,} so'm</b>\n\n"
-        f"✅ To'lovni amalga oshiring va <b>to'lov chekini (screenshot)</b> shu yerga yuboring:"
+        f"To'lov uchun rekvizitlar:\n"
+        f"• To'lov summasi: {display_amount}\n"
+        f"• Karta raqami: {card_number}\n"
+        f"• Karta egasi: {card_owner}\n"
+        f"• Ulangan raqam: {phone}\n"
+        f"To'lovni amalga oshirgach, ushbu botga to'lov cheki (skrinshot)ni yuboring.\n"
+        f"Tekshirilib, hisobingizga darhol mablag' qo'shiladi!"
     )
 
     if os.path.exists(BALANCE_BANNER):
@@ -136,6 +144,7 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
 async def process_balance_receipt(message: Message, state: FSMContext, session: AsyncSession, db_user: User):
     data = await state.get_data()
     amount = data.get("amount", 0)
+    display_amount = data.get("display_amount", f"{amount:,} so'm")
 
     file_id = message.photo[-1].file_id if message.photo else message.document.file_id
 
@@ -152,7 +161,7 @@ async def process_balance_receipt(message: Message, state: FSMContext, session: 
 
     text = (
         f"✅ <b>Chekingiz qabul qilindi!</b>\n\n"
-        f"💰 So'ralgan miqdor: <b>{amount:,} so'm</b>\n"
+        f"💰 So'ralgan miqdor: <b>{display_amount}</b>\n"
         f"⏳ Admin tekshirib, tez orada balansingizni to'ldiradi.\n\n"
         f"📦 Balans holati haqida xabar olasiz."
     )
@@ -163,7 +172,7 @@ async def process_balance_receipt(message: Message, state: FSMContext, session: 
     admin_text = (
         f"💰 <b>YANGI BALANS SO'ROVI</b>\n\n"
         f"👤 Foydalanuvchi: {buyer}\n"
-        f"💵 Miqdor: <b>{amount:,} so'm</b>\n"
+        f"💵 Miqdor: <b>{display_amount}</b>\n"
         f"🔑 So'rov ID: #{req.id}\n\n"
         f"Tasdiqlash yoki rad etish uchun admin panelga o'ting."
     )
@@ -198,8 +207,9 @@ async def balance_back(callback: CallbackQuery, state: FSMContext):
     is_admin = callback.from_user.id == config.ADMIN_ID
 
     text = (
-        "👋 <b>Asosiy menyu</b>\n\n"
-        "🛍 <b>ENTELLI STORE</b> — PUBG Mobile UC va o'yin akkauntlari do'koni boti!"
+        "👋 <b>Salom!</b>\n\n"
+        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
+        "Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
     )
     try:
         await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
@@ -211,8 +221,24 @@ async def balance_back(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "balance_cancel_state")
 async def balance_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+
+    # Foydalanuvchini to'lov turi tanlash ekraniga qaytarish
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💳 Karta orqali (Chek yuborish)",
+                   callback_data="balance_card_receipt")
+    builder.button(text="↩️ Orqaga", callback_data="balance_back")
+    builder.adjust(1)
+
+    text = (
+        f"💸 <b>Hisobni to'ldirish</b>\n\n"
+        f"❌ <b>Bekor qilindi.</b>\n\n"
+        f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
+        f"<i>To'lov turini tanlang:</i>"
+    )
+
     try:
-        await callback.message.delete()
+        await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
     except Exception:
-        pass
+        await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+
     await callback.answer("❌ Bekor qilindi.")

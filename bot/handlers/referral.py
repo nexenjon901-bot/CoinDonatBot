@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -74,37 +74,53 @@ async def show_referral(message: Message, session: AsyncSession, db_user: User):
         await message.answer("❌ Referal kodingiz mavjud emas. /start bosing.")
         return
 
-    # Referallar soni
+    # Fix #1 & #4: use referral_code in link (not telegram_id); count all referred users
     ref_result = await session.execute(
         select(func.count(User.id)).where(User.referred_by == db_user.referral_code)
     )
     ref_count = ref_result.scalar() or 0
 
-    # Dinamik sozlamalar
-    min_wd = await _get_min_withdrawal(session)
-    cb_pct = await _get_setting_val(session, SettingKeys.CASHBACK_PERCENT, "1")
-    ref_pct = await _get_setting_val(session, SettingKeys.REFERRAL_PERCENT, "2")
+    # Fix #4: confirmed count — referred users who have at least one completed order
+    from db.models.order import Order
+    confirmed_result = await session.execute(
+        select(func.count(func.distinct(Order.user_id))).where(
+            Order.user_id.in_(
+                select(User.id).where(User.referred_by == db_user.referral_code)
+            ),
+            Order.status == "completed"
+        )
+    )
+    confirmed_count = confirmed_result.scalar() or 0
 
     bot_username = config.BOT_USERNAME
+    # Fix #1: referral link uses referral_code only (already correct in original, confirmed)
     ref_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
 
+    # Fix #2: exact audit text
+    earned = format_money(db_user.ref_balance)
     text = (
-        f"🎁 <b>Referal va Keshbek Tizimi</b>\n\n"
-        f"🔗 <b>Sizning referal havolangiz:</b>\n"
-        f"<code>{ref_link}</code>\n\n"
-        f"👥 <b>Taklif qilganlaringiz:</b> {ref_count} kishi\n\n"
-        f"💰 <b>Keshbek balansingiz:</b> {format_money(db_user.ref_balance)}\n\n"
-        f"ℹ️ <i>Qoidalar:</i>\n"
-        f"- O'zingiz qilgan har bir xariddan <b>{cb_pct}%</b> keshbek olasiz.\n"
-        f"- Siz taklif qilgan odamning har bir xariddan <b>{ref_pct}%</b> bonus olasiz.\n"
-        f"- Bonusni asosiy balansga o'tkazish uchun minimal summa: <b>{format_money(min_wd)}</b>."
+        f"🎁 <b>Referal tizimi</b>\n\n"
+        f"🔗 <b>Sizning taklif havolangiz:</b>\n"
+        f"<code>https://t.me/{bot_username}?start={db_user.referral_code}</code>\n\n"
+        f"📊 <b>Statistikangiz:</b>\n"
+        f"• Jami takliflar: {ref_count} ta\n"
+        f"• Tasdiqlangan: {confirmed_count} ta  \n"
+        f"• Ishlangan summa: {earned} so'm\n\n"
+        f"<i>Har bir do'stingiz xavfsizlik tekshiruvidan o'tgach hisobingizga bonus beriladi.</i>"
     )
 
     builder = InlineKeyboardBuilder()
-    if float(db_user.ref_balance or 0) >= min_wd:
+
+    # Fix #3: "Do'stlarga ulashish" URL button with Telegram share dialog
+    share_text = "COIN DONAT BOT orqali PUBG UC va akkauntlar xarid qiling!"
+    share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
+    builder.button(text="↗️ Do'stlarga ulashish", url=share_url)
+
+    if float(db_user.ref_balance or 0) >= await _get_min_withdrawal(session):
         builder.button(text="💳 Asosiy balansga o'tkazish", callback_data="ref_withdraw")
-    
-    builder.button(text="↩️ Orqaga", callback_data="menu_back_main")
+
+    # Fix #6: back button uses "menu_back" (not "menu_back_main")
+    builder.button(text="↩️ Orqaga", callback_data="menu_back")
     builder.adjust(1)
 
     try:
@@ -115,7 +131,7 @@ async def show_referral(message: Message, session: AsyncSession, db_user: User):
     except Exception:
         try:
             await message.edit_text(text, reply_markup=builder.as_markup())
-        except:
+        except Exception:
             await message.answer(text, reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "menu_back_main")
@@ -125,13 +141,14 @@ async def ref_back_main(callback: CallbackQuery):
     is_admin = callback.from_user.id == config.ADMIN_ID
     text = (
         "👋 <b>Asosiy menyu</b>\n\n"
-        "🛍 <b>ENTELLI STORE</b> — PUBG Mobile UC va o'yin akkauntlari do'koni boti!"
+        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
+        "Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
     )
     try:
         await callback.message.edit_text(text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
     except Exception:
         try:
             await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
-        except:
+        except Exception:
             pass
     await callback.answer()

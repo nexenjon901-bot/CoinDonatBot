@@ -4,7 +4,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 
-def setup_logger(name: str = "entellibot", level: int = logging.INFO) -> logging.Logger:
+def setup_logger(name: str = "coindonatbot", level: int = logging.INFO) -> logging.Logger:
     """Logger sozlamasi"""
     logger = logging.getLogger(name)
     logger.setLevel(level)

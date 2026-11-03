@@ -30,4 +30,4 @@ async def support_url(session: AsyncSession) -> str:
     if username:
         uname = username.lstrip("@")
         return f"https://t.me/{uname}"
-    return getattr(config, "SUPPORT_URL", "https://t.me/entelli_sale")
+    return getattr(config, "SUPPORT_URL", "https://t.me/coindonat_support")

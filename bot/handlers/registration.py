@@ -18,17 +18,32 @@ MAIN_MENU_BANNER = "bot/images/menu.png"
 
 
 def get_main_menu_keyboard(_: Callable[[str], str], is_admin: bool = False):
-    """Asosiy menyu - inline keyboard"""
+    """Asosiy menyu - inline keyboard
+
+    Layout:
+      row1: Do'kon (alone)
+      row2: Profil | To'ldirish
+      row3: Foydali | Referal tizimi
+      row4: Qo'llab-quvvatlash (URL button, alone)
+      row5 (admin only): Admin panel
+    """
     builder = InlineKeyboardBuilder()
+    # row 1
     builder.button(text="🛍 Do'kon", callback_data="menu_shop")
+    # row 2
     builder.button(text="👤 Profil", callback_data="menu_profile")
-    builder.button(text="💰 Balans to'ldirish", callback_data="menu_balance")
-    builder.button(text="📋 Foydali", callback_data="menu_useful")
-    builder.button(text="🎁 Referal tizimi", callback_data="menu_referral")
-    builder.button(text="💬 Qo'llab-quvvatlash", callback_data="menu_support")
+    builder.button(text="💸 To'ldirish", callback_data="menu_balance")
+    # row 3
+    builder.button(text="📰 Foydali", callback_data="menu_useful")
+    builder.button(text="🤝 Referal tizimi", callback_data="menu_referral")
+    # row 4 — URL button for support
+    builder.button(text="👨‍💻 Qo'llab-quvvatlash ↗", url=config.SUPPORT_URL)
     if is_admin:
+        # row 5
         builder.button(text="⚙️ Admin panel", callback_data="menu_admin")
-    builder.adjust(1, 2, 2, 1)
+        builder.adjust(1, 2, 2, 1, 1)
+    else:
+        builder.adjust(1, 2, 2, 1)
     return builder.as_markup()
 
 
@@ -50,17 +65,23 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
             await session.commit()
 
         first_name = db_user.first_name or "Do'st"
+        # Registration date in DD.MM.YYYY format
+        reg_date = db_user.created_at.strftime("%d.%m.%Y") if db_user.created_at else "—"
         text = (
             f"👋 <b>Salom, {first_name}!</b>\n\n"
-            f"🛍 <b>ENTELLI STORE</b> — PUBG Mobile UC va o'yin akkauntlari do'koni boti!"
-            f" Kerakli bo'limni tanlang va qulay xarid qiling."
+            f"<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
+            f"Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>\n\n"
+            f"📅 Ro'yxatdan o'tgan sana: <b>{reg_date}</b>"
         )
 
+        from core.ui import answer_with_banner, MAIN_MENU_BANNER
         try:
-            if os.path.exists(MAIN_MENU_BANNER):
-                await message.answer_photo(photo=FSInputFile(MAIN_MENU_BANNER), caption=text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
-            else:
-                await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
+            await answer_with_banner(
+                message=message,
+                banner_path=MAIN_MENU_BANNER,
+                text=text,
+                reply_markup=get_main_menu_keyboard(_, is_admin=is_admin)
+            )
         except Exception:
             await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
         return
@@ -80,7 +101,7 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
 
     welcome_text = (
         "👋 <b>Xush kelibsiz! / Добро пожаловать! / Welcome!</b>\n\n"
-        "🛍 <b>ENTELLI STORE</b> — O'zbekistonning eng ishonchli PUBG UC va akkauntlar savdo markazi.\n\n"
+        "🪙 <b>COIN DONAT BOT</b> — O'zbekistonning eng ishonchli PUBG UC va akkauntlar savdo markazi.\n\n"
         "🌐 Iltimos, o'zingizga qulay tilni tanlang:\n"
         "🌐 Пожалуйста, выберите удобный для вас язык:\n"
         "🌐 Please select your preferred language:"
@@ -96,7 +117,7 @@ async def language_selected(callback: CallbackQuery, state: FSMContext):
     await state.update_data(selected_lang=lang_code)
 
     msgs = {
-        "uz": ("📱 <b>Ro'yxatdan o'tish</b>\n\nEntelli Store'dan foydalanish uchun telefon raqamingizni yuboring.", "📱 Telefon raqamni yuborish"),
+        "uz": ("📱 <b>Ro'yxatdan o'tish</b>\n\nCoin Donat Bot'dan foydalanish uchun telefon raqamingizni yuboring.", "📱 Telefon raqamni yuborish"),
         "ru": ("📱 <b>Регистрация</b>\n\nПожалуйста, отправьте свой номер телефона.", "📱 Отправить номер"),
         "en": ("📱 <b>Registration</b>\n\nPlease share your phone number to continue.", "📱 Send Phone Number"),
     }
@@ -194,16 +215,6 @@ async def menu_referral(callback: CallbackQuery, session: AsyncSession, db_user:
     from bot.handlers.referral import show_referral
     await callback.message.delete()
     await show_referral(callback.message, session, db_user)
-    await callback.answer()
-
-
-@router.callback_query(F.data == "menu_support")
-async def menu_support(callback: CallbackQuery):
-    await callback.message.edit_text(
-        "💬 <b>Qo'llab-quvvatlash</b>\n\n"
-        "Savollaringiz bo'lsa, admin bilan bog'laning:\n"
-        "@admin_username"
-    )
     await callback.answer()
 
 

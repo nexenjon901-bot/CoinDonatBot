@@ -1,7 +1,6 @@
 import os
-from typing import Optional
-
-from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup
+from typing import Optional, Union
+from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InputMediaPhoto
 
 MAIN_MENU_BANNER = "bot/images/menu.png"
 SHOP_BANNER = "bot/images/shop.png"
@@ -10,8 +9,29 @@ PROFILE_BANNER = "bot/images/profile.png"
 BALANCE_BANNER = "bot/images/balance.png"
 USEFUL_BANNER = "bot/images/useful.png"
 
-USD_RATE = 12700
+USD_RATE = 11880
 MIN_BALANCE_TOPUP = 10_000
+
+# File_id kesh — diskdan qayta-qayta yuklamaslik va bot tezligini bir necha barobar oshirish uchun
+_FILE_ID_CACHE: dict[str, str] = {}
+
+
+def get_cached_banner_media(path: str) -> Optional[Union[str, FSInputFile]]:
+    """
+    Agar file_id allaqachon keshda bo'lsa uni qaytaradi,
+    aks holda FSInputFile qaytaradi.
+    """
+    if path in _FILE_ID_CACHE:
+        return _FILE_ID_CACHE[path]
+    if os.path.exists(path):
+        return FSInputFile(path)
+    return None
+
+
+def cache_file_id(path: str, file_id: str):
+    """Yangi yuborilgan rasmning file_id sini keshga saqlash"""
+    if path and file_id:
+        _FILE_ID_CACHE[path] = file_id
 
 
 def main_menu_caption(first_name: str) -> str:
@@ -28,7 +48,7 @@ def main_menu_caption(first_name: str) -> str:
 def main_menu_caption_short() -> str:
     return (
         "👋 <b>Asosiy menyu</b>\n\n"
-        "🛍 <b>ENTELLI STORE</b> — PUBG Mobile va o'yin akkauntlari do'koni boti!"
+        "🪙 <b>COIN DONAT BOT</b> — PUBG Mobile va o'yin akkauntlari do'koni boti!"
     )
 
 
@@ -37,15 +57,19 @@ async def answer_with_banner(
     banner_path: str,
     text: str,
     reply_markup: Optional[InlineKeyboardMarkup] = None,
-):
-    if os.path.exists(banner_path):
-        await message.answer_photo(
-            photo=FSInputFile(banner_path),
+) -> Message:
+    photo = get_cached_banner_media(banner_path)
+    if photo:
+        sent = await message.answer_photo(
+            photo=photo,
             caption=text,
             reply_markup=reply_markup,
         )
+        if isinstance(photo, FSInputFile) and sent.photo:
+            cache_file_id(banner_path, sent.photo[-1].file_id)
+        return sent
     else:
-        await message.answer(text, reply_markup=reply_markup)
+        return await message.answer(text, reply_markup=reply_markup)
 
 
 def format_uzs(amount) -> str:

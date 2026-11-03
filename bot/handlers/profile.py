@@ -16,9 +16,12 @@ router = Router()
 
 PROFILE_BANNER = "bot/images/profile.png"
 
+# Audit USD rate fix: kurs ≈ 11 880 so'm/$
+USD_RATE = 11_880
+
 
 async def _build_profile_text(db_user: User, session: AsyncSession) -> str:
-    """Profil ma'lumotlarini matn sifatida yaratish — storechookie_bot uslubi"""
+    """Profil ma'lumotlarini matn sifatida yaratish — CoinDonatBot uslubi"""
     now = datetime.now(timezone.utc)
 
     # Xaridlar statistikasi
@@ -49,31 +52,31 @@ async def _build_profile_text(db_user: User, session: AsyncSession) -> str:
     balance = float(db_user.balance or 0)
     total_spent = float(db_user.total_spent or 0)
     username = f"@{db_user.username}" if db_user.username else "—"
-    joined = db_user.created_at.strftime(
-        "%b %d, %Y") if db_user.created_at else "—"
+    # Audit #9: date format changed to DD.MM.YYYY
+    joined = db_user.created_at.strftime("%d.%m.%Y") if db_user.created_at else "—"
 
-    # USD kurs (taxminiy, sozlash mumkin)
-    USD_RATE = 12700
     balance_usd = balance / USD_RATE
-    spent_usd = total_spent / USD_RATE
+    sum24_usd = float(sum24) / USD_RATE
+    sum7_usd = float(sum7) / USD_RATE
+    sumall_usd = float(sumall) / USD_RATE
 
+    # Audit profile text: match audit spec exactly
     text = (
         f"👤 <b>Sizning profilingiz</b>\n\n"
         f"• ID: <code>{db_user.telegram_id}</code>\n"
         f"• Username: {username}\n"
         f"• Ro'yxatdan o'tgan: {joined}\n"
-        f"• Balans: <b>${balance_usd:.2f} ({balance:,.0f} so'm)</b>\n"
-        f"• Jami sarflangan: <b>${spent_usd:.2f} ({total_spent:,.0f} so'm)</b>\n\n"
+        f"• Balans: <b>${balance_usd:.2f} ({balance:,.0f} so'm)</b>\n\n"
         f"Xaridlar:\n"
-        f"• 24 soat: {cnt24} dona / ${float(sum24)/USD_RATE:.2f}\n"
-        f"• 7 kun: {cnt7} dona / ${float(sum7)/USD_RATE:.2f}\n"
-        f"• Barcha vaqt: {cntall} dona / ${float(sumall)/USD_RATE:.2f}"
+        f"• 24 soat: {cnt24} dona / ${sum24_usd:.2f}\n"
+        f"• 7 kun: {cnt7} dona / ${sum7_usd:.2f}\n"
+        f"• Barcha vaqt: {cntall} dona / ${sumall_usd:.2f}"
     )
     return text
 
 
 def _get_profile_keyboard() -> object:
-    """Profil sahifasi uchun inline klaviatura — storechookie_bot uslubi"""
+    """Profil sahifasi uchun inline klaviatura — CoinDonatBot uslubi"""
     builder = InlineKeyboardBuilder()
     builder.button(text="📋 Buyurtmalar tarixi", callback_data="profile_orders")
     builder.button(text="🎁 Chegirmalar",
@@ -97,14 +100,13 @@ async def show_profile(message: Message, session: AsyncSession, db_user: User):
     text = await _build_profile_text(db_user, session)
     keyboard = _get_profile_keyboard()
 
-    if os.path.exists(PROFILE_BANNER):
-        await message.answer_photo(
-            photo=FSInputFile(PROFILE_BANNER),
-            caption=text,
-            reply_markup=keyboard
-        )
-    else:
-        await message.answer(text, reply_markup=keyboard)
+    from core.ui import answer_with_banner
+    await answer_with_banner(
+        message=message,
+        banner_path=PROFILE_BANNER,
+        text=text,
+        reply_markup=keyboard
+    )
 
 
 # ───────────────────────────────────────────
@@ -258,12 +260,16 @@ async def view_order_details(callback: CallbackQuery, session: AsyncSession, db_
 
 @router.callback_query(F.data == "profile_discounts")
 async def show_discounts(callback: CallbackQuery):
+    from core.config import config
+
     text = (
         "🎁 <b>Chegirmalar</b>\n\n"
         "Hozircha faol chegirmalar mavjud emas.\n\n"
         "Yangi chegirmalar va aksiyalar haqida kanalimizni kuzating!"
     )
     builder = InlineKeyboardBuilder()
+    # Audit #11: add channel URL button BEFORE the "Orqaga" button
+    builder.button(text="📢 Kanalga o'tish", url=config.SUPPORT_URL)
     builder.button(text="↩️ Orqaga", callback_data="profile_back_detail")
     builder.adjust(1)
 
@@ -334,9 +340,11 @@ async def profile_back_main(callback: CallbackQuery):
     from core.config import config
     is_admin = callback.from_user.id == config.ADMIN_ID
 
+    # Audit main menu text: use <blockquote> format
     text = (
-        "👋 <b>Asosiy menyu</b>\n\n"
-        "🛍 <b>ENTELLI STORE</b> — PUBG Mobile UC va o'yin akkauntlari do'koni boti!"
+        "👋 <b>Salom!</b>\n\n"
+        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
+        "Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
     )
     try:
         await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
