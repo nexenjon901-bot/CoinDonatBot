@@ -28,10 +28,6 @@ async def admin_products_list(message: Message, session: AsyncSession):
     res = await session.execute(select(Product))
     products = res.scalars().all()
     
-    if not products:
-        await message.answer("Mahsulotlar yo'q. Dastlab bazaga mahsulot qo'shing.")
-        return
-        
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Yangi mahsulot", callback_data="adm_prod_add")
     for p in products:
@@ -39,7 +35,7 @@ async def admin_products_list(message: Message, session: AsyncSession):
         qty_str = "Cheksiz" if getattr(p, "product_type", "account") == "uc" else f"{p.quantity} ta"
         builder.button(text=f"{icon} {p.name} ({qty_str})", callback_data=f"adm_prod_{p.id}")
     builder.adjust(1)
-    await message.answer("📦 <b>Mahsulotlar</b>\n\nMahsulotni tanlang:", reply_markup=builder.as_markup())
+    await message.answer("📦 <b>Mahsulotlar</b>\n\nMahsulotni tanlang:" if products else "📦 <b>Mahsulotlar</b>\n\nHozircha mahsulot yo'q. Yangi mahsulot qo'shing:", reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "adm_prod_add")
 async def add_prod_start(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
@@ -140,7 +136,7 @@ async def add_prod_image(message: Message, state: FSMContext, session: AsyncSess
     else:
         await message.answer("Rasm yuboring yoki /skip bosing.")
 
-@router.callback_query(F.data.startswith("adm_prod_"))
+@router.callback_query(F.data.regexp(r"^adm_prod_\d+$"))
 async def admin_product_detail(callback: CallbackQuery, session: AsyncSession):
     pid = int(callback.data.split("_")[2])
     p = await session.get(Product, pid)

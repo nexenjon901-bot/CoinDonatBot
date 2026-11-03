@@ -9,6 +9,7 @@ Telegram Bot API:
   HTML formatidagi xabar matnlari, sarlavhalar, detallar va postlarda Telegram Premium emojilarni ko'rsatish
 """
 
+import re
 from typing import Optional, Tuple
 from aiogram.types import InlineKeyboardButton, Message
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -157,7 +158,18 @@ def create_button(
     eid = get_emoji_id(emoji_key) if emoji_key else None
     fallback = FALLBACK_ICONS.get(emoji_key, "") if emoji_key else ""
 
-    btn_text = f"{fallback} {text}".strip() if fallback and not text.startswith(fallback) else text
+    # Agar custom emoji ID mavjud bo'lsa — tugma matniga fallback qo'shmaymiz
+    # (Telegram har ikkalasini ko'rsatib, ikki marta emoji chiqaradi)
+    # Matn allaqachon emoji bilan boshlansa (masalan kategoriya nomi "🎮 PUBG"),
+    # ikkinchi emoji qo'shilmaydi.
+    has_leading_symbol = bool(text) and not (text[0].isalnum() or text[0] in "'\"(")
+    if eid:
+        # icon_custom_emoji_id o'zi ko'rsatadi — matndagi bosh emoji olib tashlanadi
+        btn_text = re.sub(r"^[^\w]+", "", text) if has_leading_symbol else text
+    elif fallback and not has_leading_symbol:
+        btn_text = f"{fallback} {text}".strip()
+    else:
+        btn_text = text
 
     kwargs = {"text": btn_text}
     if callback_data is not None:
