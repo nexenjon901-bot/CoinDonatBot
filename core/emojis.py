@@ -4,9 +4,9 @@ Admin panel orqali dinamik o'zgartiriladi va ma'lumotlar bazasida saqlanadi.
 
 Telegram Bot API:
 - InlineKeyboardButton(..., icon_custom_emoji_id=...):
-  Fragment'da username sotib olgan yoki bot egasida tegishli imtiyoz bo'lganda
+  Fragment'da username sotib olgan yoki bot egasida tegishli imtiyoz bo'lganda tugma ichida
 - <tg-emoji emoji-id="...">{fallback}</tg-emoji>:
-  HTML formatidagi xabar matnlari, sarlavhalar va postlarda Telegram Premium emojilarni ko'rsatish
+  HTML formatidagi xabar matnlari, sarlavhalar, detallar va postlarda Telegram Premium emojilarni ko'rsatish
 """
 
 from typing import Optional, Tuple
@@ -17,21 +17,26 @@ from sqlalchemy import select
 
 
 class EmojiSettings(BaseSettings):
-    # Standart .env zaxira ID lar
-    EMOJI_SHOP: str = ""         # Pushti sumka (shopping bag)
-    EMOJI_PROFILE: str = ""      # Ko'k odam silueti (bust)
-    EMOJI_BALANCE: str = ""      # Qanotli pul (money with wings)
-    EMOJI_USEFUL: str = ""       # Kulrang gazeta
-    EMOJI_REFERRAL: str = ""     # Sariq qo'l siqish (handshake)
-    EMOJI_SUPPORT: str = ""      # Sariq operator/xodim
-    EMOJI_PUBG: str = ""         # PUBG o'yin ikonkasi
-    EMOJI_ORDERS: str = ""       # Oq varaq / hujjat
-    EMOJI_DISCOUNTS: str = ""    # Ko'k "SALE" / sariq chipta
-    EMOJI_LANG: str = ""         # Ko'k-yashil globus
-    EMOJI_POST: str = ""         # E'lonlar va postlar ikonkasi
-    EMOJI_SHARE: str = ""        # Ko'k "share" strelkasi
-    EMOJI_BACK: str = ""         # Oq burilgan strelka
-    EMOJI_VERIFIED: str = ""     # Yashil tasdiq belgisi
+    EMOJI_SHOP: str = ""
+    EMOJI_PROFILE: str = ""
+    EMOJI_BALANCE: str = ""
+    EMOJI_USEFUL: str = ""
+    EMOJI_REFERRAL: str = ""
+    EMOJI_SUPPORT: str = ""
+    EMOJI_PUBG: str = ""
+    EMOJI_ORDERS: str = ""
+    EMOJI_DISCOUNTS: str = ""
+    EMOJI_LANG: str = ""
+    EMOJI_POST: str = ""
+    EMOJI_MONEY: str = ""
+    EMOJI_CARD: str = ""
+    EMOJI_ID: str = ""
+    EMOJI_DATE: str = ""
+    EMOJI_STAT: str = ""
+    EMOJI_PACKAGE: str = ""
+    EMOJI_VERIFY: str = ""
+    EMOJI_WARN: str = ""
+    EMOJI_BACK: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -58,15 +63,19 @@ FALLBACK_ICONS = {
     "discounts": "🏷",
     "lang": "🌐",
     "post": "📢",
-    "share": "↗️",
-    "back": "↩️",
-    "cancel": "↩️",
-    "verified": "✅",
-    "clock": "⏳",
-    "warning": "⚠️",
-    "card": "💳",
-    "diamond": "💎",
     "money": "💰",
+    "card": "💳",
+    "id": "🆔",
+    "date": "📅",
+    "stat": "📊",
+    "package": "📦",
+    "verify": "✅",
+    "warn": "⚠️",
+    "back": "↩️",
+    "cancel": "❌",
+    "share": "↗️",
+    "admin": "⚙️",
+    "wave": "👋",
 }
 
 # Admin paneldagi nomlar
@@ -81,6 +90,13 @@ EMOJI_LABELS = {
     "orders": "📄 Buyurtmalar tarixi",
     "discounts": "🏷 Chegirmalar",
     "lang": "🌐 Bot tili",
+    "money": "💰 Narx va Pul",
+    "card": "💳 Karta va To'lov",
+    "id": "🆔 Foydalanuvchi ID",
+    "date": "📅 Sana va Vaqt",
+    "stat": "📊 Statistika",
+    "package": "📦 Mahsulot / Stok",
+    "verify": "✅ Bajarildi / Tasdiq",
     "post": "📢 E'lonlar va Postlar",
 }
 
@@ -106,36 +122,26 @@ def get_emoji_id(key: str) -> Optional[str]:
     if key in _DB_EMOJI_CACHE and _DB_EMOJI_CACHE[key]:
         return _DB_EMOJI_CACHE[key]
 
-    env_mapping = {
-        "shop": emojis_cfg.EMOJI_SHOP,
-        "profile": emojis_cfg.EMOJI_PROFILE,
-        "balance": emojis_cfg.EMOJI_BALANCE,
-        "useful": emojis_cfg.EMOJI_USEFUL,
-        "referral": emojis_cfg.EMOJI_REFERRAL,
-        "support": emojis_cfg.EMOJI_SUPPORT,
-        "pubg": emojis_cfg.EMOJI_PUBG,
-        "orders": emojis_cfg.EMOJI_ORDERS,
-        "discounts": emojis_cfg.EMOJI_DISCOUNTS,
-        "lang": emojis_cfg.EMOJI_LANG,
-        "post": emojis_cfg.EMOJI_POST,
-        "share": emojis_cfg.EMOJI_SHARE,
-        "back": emojis_cfg.EMOJI_BACK,
-        "verified": emojis_cfg.EMOJI_VERIFIED,
-    }
-    val = env_mapping.get(key, "").strip()
-    return val if val else None
+    env_val = getattr(emojis_cfg, f"EMOJI_{key.upper()}", "")
+    return env_val.strip() if env_val else None
+
+
+def pe(key: str, fallback: Optional[str] = None) -> str:
+    """
+    Qisqa nom: Premium Emoji (pe).
+    Matn ichida va sarlavhalarda Premium Emoji chiqarish uchun asosiy funksiya.
+    Agar custom_emoji_id bo'lsa: <tg-emoji emoji-id="...">fallback</tg-emoji>
+    Aks holda: standart fallback emoji.
+    """
+    fb = fallback or FALLBACK_ICONS.get(key, "✨")
+    eid = get_emoji_id(key)
+    if eid:
+        return f'<tg-emoji emoji-id="{eid}">{fb}</tg-emoji>'
+    return fb
 
 
 def format_header_emoji(key: str) -> str:
-    """
-    Sarlavha, matn va postlar uchun:
-    Agar custom_emoji_id bo'lsa <tg-emoji> qaytaradi, aks holda standart fallback emoji.
-    """
-    fallback = FALLBACK_ICONS.get(key, "✨")
-    eid = get_emoji_id(key)
-    if eid:
-        return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>'
-    return fallback
+    return pe(key)
 
 
 def create_button(
@@ -167,9 +173,6 @@ def create_button(
 def extract_custom_emoji_id(message: Message) -> Tuple[Optional[str], str]:
     """
     Admin yuborgan xabardan Telegram Premium Custom Emoji ID ni ajratib olish.
-    Agar admin Telegram Premium emojini jo'natgan bo'lsa message.entities dan olinadi.
-    Agar ID raqamini (5368324170671202286) yozgan bo'lsa o'sha raqam olinadi.
-    Qaytaradi: (custom_emoji_id, fallback_text)
     """
     if message.entities:
         for entity in message.entities:
@@ -177,7 +180,6 @@ def extract_custom_emoji_id(message: Message) -> Tuple[Optional[str], str]:
                 fallback = message.text[entity.offset: entity.offset + entity.length] if message.text else "✨"
                 return str(entity.custom_emoji_id), fallback
 
-    # Agar matn faqat raqamlardan iborat bo'lsa (ID bo'lsa)
     raw_text = (message.text or "").strip()
     if raw_text.isdigit() and len(raw_text) > 10:
         return raw_text, "✨"

@@ -21,8 +21,9 @@ async def show_useful(message: Message):
     builder.button(text="↩️ Orqaga", callback_data="menu_back")
     builder.adjust(1)
 
+    from core.emojis import pe
     text = (
-        "📰 <b>Foydali ma'lumotlar</b>\n\n"
+        f"{pe('useful')} <b>Foydali ma'lumotlar</b>\n\n"
         "<blockquote>Botimiz 24/7 rejimda avtomatik ishlaydi.\n"
         "Barcha tovarlar xarid qilingan zahoti beriladi.\n"
         "Kafolat va xavfsizlik 100% ta'minlangan!</blockquote>"

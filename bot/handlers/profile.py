@@ -60,14 +60,14 @@ async def _build_profile_text(db_user: User, session: AsyncSession) -> str:
     sum7_usd = float(sum7) / USD_RATE
     sumall_usd = float(sumall) / USD_RATE
 
-    # Audit profile text: match audit spec exactly
+    from core.emojis import pe
     text = (
-        f"👤 <b>Sizning profilingiz</b>\n\n"
-        f"• ID: <code>{db_user.telegram_id}</code>\n"
+        f"{pe('profile')} <b>Sizning profilingiz</b>\n\n"
+        f"• {pe('id')} ID: <code>{db_user.telegram_id}</code>\n"
         f"• Username: {username}\n"
-        f"• Ro'yxatdan o'tgan: {joined}\n"
-        f"• Balans: <b>${balance_usd:.2f} ({balance:,.0f} so'm)</b>\n\n"
-        f"Xaridlar:\n"
+        f"• {pe('date')} Ro'yxatdan o'tgan: {joined}\n"
+        f"• {pe('card')} Balans: <b>${balance_usd:.2f} ({balance:,.0f} so'm)</b>\n\n"
+        f"{pe('stat')} <b>Xaridlar statistikasi:</b>\n"
         f"• 24 soat: {cnt24} dona / ${sum24_usd:.2f}\n"
         f"• 7 kun: {cnt7} dona / ${sum7_usd:.2f}\n"
         f"• Barcha vaqt: {cntall} dona / ${sumall_usd:.2f}"
@@ -76,14 +76,13 @@ async def _build_profile_text(db_user: User, session: AsyncSession) -> str:
 
 
 def _get_profile_keyboard() -> object:
-    """Profil sahifasi uchun inline klaviatura — CoinDonatBot uslubi"""
+    """Profil sahifasi uchun inline klaviatura (Telegram Premium emoji bilan)"""
+    from core.emojis import create_button
     builder = InlineKeyboardBuilder()
-    builder.button(text="📋 Buyurtmalar tarixi", callback_data="profile_orders")
-    builder.button(text="🎁 Chegirmalar",
-                   callback_data="profile_discounts")
-    builder.button(text="🌐 Bot tili",
-                   callback_data="profile_change_lang")
-    builder.button(text="↩️ Orqaga",             callback_data="profile_back")
+    builder.add(create_button("Buyurtmalar tarixi", emoji_key="orders", callback_data="profile_orders"))
+    builder.add(create_button("Chegirmalar", emoji_key="discounts", callback_data="profile_discounts"))
+    builder.add(create_button("Bot tili", emoji_key="lang", callback_data="profile_change_lang"))
+    builder.add(create_button("Orqaga", emoji_key="back", callback_data="profile_back"))
     builder.adjust(1, 2, 1)
     return builder.as_markup()
 

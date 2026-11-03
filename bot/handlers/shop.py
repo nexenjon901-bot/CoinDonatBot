@@ -54,10 +54,11 @@ async def show_shop(message: Message, session: AsyncSession, db_user: User, _: C
         )
         return
 
+    from core.emojis import pe
     text = (
-        "🛍 <b>Do'kon</b>\n\n"
-        "Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
-        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi."
+        f"{pe('shop')} <b>Do'kon</b>\n\n"
+        "<blockquote>Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
+        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi.</blockquote>"
     )
     keyboard = get_categories_keyboard(categories, with_back=True)
 
@@ -73,10 +74,11 @@ async def back_to_categories(callback: CallbackQuery, session: AsyncSession):
     categories = cats_result.scalars().all()
     keyboard = get_categories_keyboard(categories, with_back=True)
 
+    from core.emojis import pe
     text = (
-        "🛍 <b>Do'kon</b>\n\n"
-        "Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
-        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi."
+        f"{pe('shop')} <b>Do'kon</b>\n\n"
+        "<blockquote>Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
+        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi.</blockquote>"
     )
 
     try:
@@ -139,12 +141,13 @@ async def show_product_detail(callback: CallbackQuery, session: AsyncSession):
 
     is_uc_prod = getattr(prod, "product_type", "account") == "uc"
     prod_icon = premium_emoji("5368324170671202286", "💎") if is_uc_prod else "🎮"
+    from core.emojis import pe
     text = (
-        f"🛍 <b>Do'kon</b>\n\n"
-        f"{prod_icon} <b>{prod.name}</b>\n\n"
-        f"💰 Narxi: <b>{prod.price_uzs:,.0f} so'm ({price_usd})</b>\n"
-        f"📦 Mavjud: <b>{status_text}</b>\n"
-        f"📝 Tavsif: <i>{description}</i>\n\n"
+        f"{pe('shop')} <b>Do'kon</b>\n\n"
+        f"{pe('pubg')} <b>{prod.name}</b>\n\n"
+        f"{pe('money')} Narxi: <b>{prod.price_uzs:,.0f} so'm ({price_usd})</b>\n"
+        f"{pe('package')} Mavjud: <b>{status_text}</b>\n"
+        f"{pe('useful')} Tavsif: <i>{description}</i>\n\n"
         f"<i>Xarid qilish uchun quyidagi tugmani bosing:</i>"
     )
 

@@ -18,29 +18,22 @@ MAIN_MENU_BANNER = "bot/images/menu.png"
 
 
 def get_main_menu_keyboard(_: Callable[[str], str], is_admin: bool = False):
-    """Asosiy menyu - inline keyboard
-
-    Layout:
-      row1: Do'kon (alone)
-      row2: Profil | To'ldirish
-      row3: Foydali | Referal tizimi
-      row4: Qo'llab-quvvatlash (URL button, alone)
-      row5 (admin only): Admin panel
-    """
+    """Asosiy menyu - inline keyboard (Telegram Premium emoji bilan)"""
+    from core.emojis import create_button
     builder = InlineKeyboardBuilder()
     # row 1
-    builder.button(text="🛍 Do'kon", callback_data="menu_shop")
+    builder.add(create_button("Do'kon", emoji_key="shop", callback_data="menu_shop"))
     # row 2
-    builder.button(text="👤 Profil", callback_data="menu_profile")
-    builder.button(text="💸 To'ldirish", callback_data="menu_balance")
+    builder.add(create_button("Profil", emoji_key="profile", callback_data="menu_profile"))
+    builder.add(create_button("To'ldirish", emoji_key="balance", callback_data="menu_balance"))
     # row 3
-    builder.button(text="📰 Foydali", callback_data="menu_useful")
-    builder.button(text="🤝 Referal tizimi", callback_data="menu_referral")
+    builder.add(create_button("Foydali", emoji_key="useful", callback_data="menu_useful"))
+    builder.add(create_button("Referal tizimi", emoji_key="referral", callback_data="menu_referral"))
     # row 4 — URL button for support
-    builder.button(text="👨‍💻 Qo'llab-quvvatlash ↗", url=config.SUPPORT_URL)
+    builder.add(create_button("Qo'llab-quvvatlash ↗", emoji_key="support", url=config.SUPPORT_URL))
     if is_admin:
         # row 5
-        builder.button(text="⚙️ Admin panel", callback_data="menu_admin")
+        builder.add(create_button("Admin panel", emoji_key="admin", callback_data="menu_admin"))
         builder.adjust(1, 2, 2, 1, 1)
     else:
         builder.adjust(1, 2, 2, 1)
@@ -67,11 +60,14 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
         first_name = db_user.first_name or "Do'st"
         # Registration date in DD.MM.YYYY format
         reg_date = db_user.created_at.strftime("%d.%m.%Y") if db_user.created_at else "—"
+        from core.emojis import pe
+        wave_icon = pe("wave")
+        date_icon = pe("date")
         text = (
-            f"👋 <b>Salom, {first_name}!</b>\n\n"
+            f"{wave_icon} <b>Salom, {first_name}!</b>\n\n"
             f"<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
             f"Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>\n\n"
-            f"📅 Ro'yxatdan o'tgan sana: <b>{reg_date}</b>"
+            f"{date_icon} Ro'yxatdan o'tgan sana: <b>{reg_date}</b>"
         )
 
         await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))

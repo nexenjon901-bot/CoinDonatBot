@@ -38,17 +38,17 @@ async def _send_balance_menu(target, text: str, keyboard):
 # ───────────────────────────────────────────
 
 async def show_balance_menu(message: Message, db_user: User):
+    from core.emojis import create_button, pe
     builder = InlineKeyboardBuilder()
-    builder.button(text="💳 Karta orqali (Chek yuborish)",
-                   callback_data="balance_card_receipt")
-    builder.button(text="↩️ Orqaga", callback_data="balance_back")
+    builder.add(create_button("Karta orqali (Chek yuborish)", emoji_key="card", callback_data="balance_card_receipt"))
+    builder.add(create_button("Orqaga", emoji_key="back", callback_data="balance_back"))
     builder.adjust(1)
 
     text = (
-        f"💸 <b>Hisobni to'ldirish</b>\n\n"
+        f"{pe('balance')} <b>Hisobni to'ldirish</b>\n\n"
         f"Hisobingizni to'ldirish uchun qulay to'lov usulini tanlang.\n"
         f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
-        f"💳 Joriy balans: <b>{float(db_user.balance or 0):,.0f} so'm</b>\n\n"
+        f"{pe('card')} Joriy balans: <b>{float(db_user.balance or 0):,.0f} so'm</b>\n\n"
         f"<i>To'lov turini tanlang:</i>"
     )
 
@@ -118,13 +118,14 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
     builder.button(text="❌ Bekor qilish", callback_data="balance_cancel_state")
     builder.adjust(1)
 
+    from core.emojis import pe
     text = (
-        f"To'lov uchun rekvizitlar:\n"
-        f"• To'lov summasi: {display_amount}\n"
-        f"• Karta raqami: {card_number}\n"
-        f"• Karta egasi: {card_owner}\n"
-        f"• Ulangan raqam: {phone}\n"
-        f"To'lovni amalga oshirgach, ushbu botga to'lov cheki (skrinshot)ni yuboring.\n"
+        f"{pe('card')} <b>To'lov uchun rekvizitlar:</b>\n\n"
+        f"• {pe('money')} To'lov summasi: <b>{display_amount}</b>\n"
+        f"• {pe('card')} Karta raqami: <code>{card_number}</code>\n"
+        f"• {pe('id')} Karta egasi: <b>{card_owner}</b>\n"
+        f"• {pe('support')} Ulangan raqam: <code>{phone}</code>\n\n"
+        f"{pe('warn')} To'lovni amalga oshirgach, ushbu botga to'lov cheki (skrinshot)ni yuboring.\n"
         f"Tekshirilib, hisobingizga darhol mablag' qo'shiladi!"
     )
 
