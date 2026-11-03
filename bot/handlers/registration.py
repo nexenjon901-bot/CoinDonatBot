@@ -74,16 +74,7 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
             f"📅 Ro'yxatdan o'tgan sana: <b>{reg_date}</b>"
         )
 
-        from core.ui import answer_with_banner, MAIN_MENU_BANNER
-        try:
-            await answer_with_banner(
-                message=message,
-                banner_path=MAIN_MENU_BANNER,
-                text=text,
-                reply_markup=get_main_menu_keyboard(_, is_admin=is_admin)
-            )
-        except Exception:
-            await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
+        await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
         return
 
     # Ro'yxatdan o'tmagan — til tanlash

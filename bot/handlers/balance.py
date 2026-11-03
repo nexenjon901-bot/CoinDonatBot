@@ -128,14 +128,7 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
         f"Tekshirilib, hisobingizga darhol mablag' qo'shiladi!"
     )
 
-    if os.path.exists(BALANCE_BANNER):
-        await message.answer_photo(
-            photo=FSInputFile(BALANCE_BANNER),
-            caption=text,
-            reply_markup=builder.as_markup()
-        )
-    else:
-        await message.answer(text, reply_markup=builder.as_markup())
+    await message.answer(text, reply_markup=builder.as_markup())
 
     await state.set_state(BalanceFill.waiting_for_receipt)
 

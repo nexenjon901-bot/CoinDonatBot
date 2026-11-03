@@ -100,13 +100,7 @@ async def show_profile(message: Message, session: AsyncSession, db_user: User):
     text = await _build_profile_text(db_user, session)
     keyboard = _get_profile_keyboard()
 
-    from core.ui import answer_with_banner
-    await answer_with_banner(
-        message=message,
-        banner_path=PROFILE_BANNER,
-        text=text,
-        reply_markup=keyboard
-    )
+    await message.answer(text, reply_markup=keyboard)
 
 
 # ───────────────────────────────────────────

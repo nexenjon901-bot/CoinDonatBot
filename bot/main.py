@@ -31,11 +31,16 @@ async def start_bot():
     # Bazadagi jadvallarni avtomatik tekshirish va yaratish
     try:
         from init_db import init_db
+        from core.emojis import load_emojis_from_db
         logger.info("Ma'lumotlar bazasi jadvallarini tekshirish va yaratish...")
         await init_db()
         logger.info("Baza jadvallari muvaffaqiyatli tayyorlandi!")
+
+        async with async_session() as session:
+            await load_emojis_from_db(session)
+        logger.info("Telegram Premium emojilar bazadan yuklandi!")
     except Exception as e:
-        logger.error(f"Bazani initsializatsiya qilishda xatolik: {e}")
+        logger.error(f"Initsializatsiyada xatolik: {e}")
 
     dp = Dispatcher()
     dp.update.outer_middleware(DbSessionMiddleware(async_session))

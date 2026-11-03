@@ -61,11 +61,7 @@ async def show_shop(message: Message, session: AsyncSession, db_user: User, _: C
     )
     keyboard = get_categories_keyboard(categories, with_back=True)
 
-    banner = await _get_banner(SHOP_BANNER)
-    if banner:
-        await message.answer_photo(photo=banner, caption=text, reply_markup=keyboard)
-    else:
-        await message.answer(text, reply_markup=keyboard)
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.callback_query(F.data == "shop_back_cats")
@@ -114,22 +110,13 @@ async def show_category_products(callback: CallbackQuery, session: AsyncSession)
     cat_emoji = premium_emoji(cat.emoji_id, cat.emoji or "🎮") if getattr(cat, "emoji_id", None) else (cat.emoji or "🎮")
     text = f"🛍 <b>Do'kon</b>\n\n{cat_emoji} <b>{cat.name}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
 
-    from aiogram.types import InputMediaPhoto
-    media_file = cat.image_file_id if cat.image_file_id else FSInputFile(SHOP_BANNER)
-
     try:
-        if media_file:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(media=media_file, caption=text, parse_mode="HTML"),
-                reply_markup=keyboard
-            )
-        else:
-            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
+        await callback.message.edit_text(text=text, reply_markup=keyboard)
     except Exception:
         try:
-            await callback.message.edit_text(text=text, reply_markup=keyboard)
+            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
         except Exception:
-            pass
+            await callback.message.answer(text, reply_markup=keyboard)
     await callback.answer()
 
 
@@ -163,29 +150,13 @@ async def show_product_detail(callback: CallbackQuery, session: AsyncSession):
 
     keyboard = get_product_detail_keyboard(prod)
 
-    from aiogram.types import InputMediaPhoto
-    
-    # Try product image, fallback to category image, fallback to PRODUCT_BANNER
-    cat = await session.get(Category, prod.category_id)
-    media_file = prod.image_file_id
-    if not media_file and cat:
-        media_file = cat.image_file_id
-    if not media_file:
-        media_file = FSInputFile(PRODUCT_BANNER)
-
     try:
-        if media_file:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(media=media_file, caption=text, parse_mode="HTML"),
-                reply_markup=keyboard
-            )
-        else:
-            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
+        await callback.message.edit_text(text=text, reply_markup=keyboard)
     except Exception:
         try:
-            await callback.message.edit_text(text=text, reply_markup=keyboard)
+            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
         except Exception:
-            pass
+            await callback.message.answer(text, reply_markup=keyboard)
     await callback.answer()
 
 
@@ -212,22 +183,13 @@ async def back_to_product_list(callback: CallbackQuery, session: AsyncSession):
     cat_emoji_b = premium_emoji(cat.emoji_id, cat.emoji or "🎮") if cat and getattr(cat, "emoji_id", None) else (cat.emoji if cat else "🎮")
     text = f"🛍 <b>Do'kon</b>\n\n{cat_emoji_b} <b>{cat.name if cat else 'Kategoriya'}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
 
-    from aiogram.types import InputMediaPhoto
-    media_file = cat.image_file_id if (cat and cat.image_file_id) else FSInputFile(SHOP_BANNER)
-
     try:
-        if media_file:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(media=media_file, caption=text, parse_mode="HTML"),
-                reply_markup=keyboard
-            )
-        else:
-            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
+        await callback.message.edit_text(text=text, reply_markup=keyboard)
     except Exception:
         try:
-            await callback.message.edit_text(text=text, reply_markup=keyboard)
+            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
         except Exception:
-            pass
+            await callback.message.answer(text, reply_markup=keyboard)
     await callback.answer()
 
 

@@ -24,3 +24,16 @@ class SettingKeys:
     REFERRAL_PERCENT = "referral_percent"        # Referal foizi (%)
     CASHBACK_PERCENT = "cashback_percent"        # Keshbek foizi (%)
     MIN_WITHDRAWAL = "min_withdrawal"            # Minimal yechib olish summasi
+
+    # Telegram Premium Custom Emoji kalitlari (Admin panel orqali sozlanadi)
+    EMOJI_SHOP = "emoji_shop"                    # Do'kon tugmasi / sarlavhasi
+    EMOJI_PROFILE = "emoji_profile"              # Profil tugmasi / sarlavhasi
+    EMOJI_BALANCE = "emoji_balance"              # To'ldirish tugmasi / sarlavhasi
+    EMOJI_USEFUL = "emoji_useful"                # Foydali tugmasi / sarlavhasi
+    EMOJI_REFERRAL = "emoji_referral"            # Referal tizimi
+    EMOJI_SUPPORT = "emoji_support"              # Qo'llab-quvvatlash
+    EMOJI_PUBG = "emoji_pubg"                    # PUBG Mobile
+    EMOJI_ORDERS = "emoji_orders"                # Buyurtmalar tarixi
+    EMOJI_DISCOUNTS = "emoji_discounts"          # Chegirmalar
+    EMOJI_LANG = "emoji_lang"                    # Bot tili
+    EMOJI_POST = "emoji_post"                    # E'lonlar / Postlar sarlavhasi
