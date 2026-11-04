@@ -409,6 +409,17 @@ async def confirm_uc_purchase(callback: CallbackQuery, state: FSMContext, sessio
 async def confirm_purchase(callback: CallbackQuery, session: AsyncSession, db_user: User):
     prod_id = int(callback.data.split("_")[2])
     
+    # Mahsulotni tekshiramiz
+    prod = await session.get(Product, prod_id)
+    if not prod or not prod.is_active:
+        await callback.answer("❌ Mahsulot topilmadi!", show_alert=True)
+        return
+    
+    # Stok tekshirish - avval quantity ni ko'ramiz
+    if prod.quantity <= 0:
+        await callback.answer("❌ Kechirasiz, hozircha stokda mahsulot yo'q. Admin bilan bog'laning!", show_alert=True)
+        return
+    
     # Order number generation
     order_num = await generate_order_number(session)
 
@@ -425,17 +436,20 @@ async def confirm_purchase(callback: CallbackQuery, session: AsyncSession, db_us
     )
     stock_row = res_stock.fetchone()
     if not stock_row:
-        await callback.answer("❌ Kechirasiz, mahsulot aynan hozir tugab qoldi!", show_alert=True)
+        # Stok tugab qolgan - quantity ni yangilab qo'yamiz
+        await session.execute(
+            text("UPDATE products SET quantity = 0 WHERE id = :pid"),
+            {"pid": prod_id}
+        )
+        await session.commit()
+        await callback.answer("❌ Kechirasiz, mahsulot aynan hozir tugab qoldi! Iltimos, keyinroq urinib ko'ring.", show_alert=True)
         return
     
     stock_id, data_encrypted = stock_row
     
-    # 2. Mahsulot nomi va narxini olish
-    res_prod = await session.execute(
-        text("SELECT name, price_uzs FROM products WHERE id = :id"),
-        {"id": prod_id}
-    )
-    prod_name, price = res_prod.fetchone()
+    # 2. Mahsulot nomi va narxini olish (prod obyektidan)
+    prod_name = prod.name
+    price = prod.price_uzs
     
     # 3. Atomik ravishda pulni yechamiz
     try:

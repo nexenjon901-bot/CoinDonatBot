@@ -81,7 +81,7 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
 
     welcome_text = (
         "👋 <b>Xush kelibsiz! / Добро пожаловать! / Welcome!</b>\n\n"
-        "🪙 <b>COIN DONAT BOT</b> — O'zbekistonning eng ishonchli PUBG UC va akkauntlar savdo markazi.\n\n"
+        "<blockquote>🪙 <b>COIN DONAT BOT</b> — O'zbekistonning eng ishonchli PUBG UC va akkauntlar savdo markazi.</blockquote>\n\n"
         "🌐 Iltimos, o'zingizga qulay tilni tanlang:\n"
         "🌐 Пожалуйста, выберите удобный для вас язык:\n"
         "🌐 Please select your preferred language:"

@@ -40,8 +40,9 @@ def get_admin_keyboard() -> ReplyKeyboardMarkup:
          KeyboardButton(text="🛒 Buyurtmalar")],
         [KeyboardButton(text="🌟 Premium Emojilar"),
          KeyboardButton(text="⚙️ Sozlamalar")],
-        [KeyboardButton(text="📢 Xabar yuborish"),
-         KeyboardButton(text="⬅️ Bosh menyuga")],
+        [KeyboardButton(text="� Qidirish"),
+         KeyboardButton(text="�📢 Xabar yuborish")],
+        [KeyboardButton(text="⬅️ Bosh menyuga")],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
@@ -83,6 +84,7 @@ async def show_statistics(message: Message, session: AsyncSession):
     now = datetime.now(timezone.utc)
     day_ago = now - timedelta(hours=24)
     week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
 
     daily_rev = (await session.execute(
         select(func.coalesce(func.sum(Order.price), 0)).where(
@@ -93,27 +95,46 @@ async def show_statistics(message: Message, session: AsyncSession):
         select(func.coalesce(func.sum(Order.price), 0)).where(
             Order.status == OrderStatus.COMPLETED, Order.created_at >= week_ago)
     )).scalar() or 0
+    
+    monthly_rev = (await session.execute(
+        select(func.coalesce(func.sum(Order.price), 0)).where(
+            Order.status == OrderStatus.COMPLETED, Order.created_at >= month_ago)
+    )).scalar() or 0
 
     pending_balance = (await session.execute(
         select(func.count(BalanceRequest.id)).where(BalanceRequest.status == BalanceRequestStatus.PENDING)
     )).scalar() or 0
 
     total_products = (await session.execute(select(func.count(Product.id)))).scalar() or 0
+    
+    # O'rtacha buyurtma qiymati
+    avg_order = (total_revenue / total_orders) if total_orders > 0 else 0
+    
+    # Faol foydalanuvchilar (so'nggi 7 kun ichida xarid qilganlar)
+    active_users = (await session.execute(
+        select(func.count(func.distinct(Order.user_id))).where(
+            Order.status == OrderStatus.COMPLETED, Order.created_at >= week_ago)
+    )).scalar() or 0
 
     text = (
         f"📊 <b>Bot Statistikasi</b>\n\n"
         f"👥 Jami foydalanuvchilar: <b>{total_users} ta</b>\n"
-        f"🛒 Bajarilgan buyurtmalar: <b>{total_orders} ta</b>\n\n"
+        f"� Faol foydalanuvchilar (7 kun): <b>{active_users} ta</b>\n"
+        f"�🛒 Bajarilgan buyurtmalar: <b>{total_orders} ta</b>\n\n"
         f"💰 <b>Daromadlar:</b>\n"
         f"• Kunlik (24 soat): <b>{float(daily_rev):,.0f} so'm</b>\n"
         f"• Haftalik (7 kun): <b>{float(weekly_rev):,.0f} so'm</b>\n"
-        f"• Jami aylanma: <b>{float(total_revenue):,.0f} so'm</b>\n\n"
+        f"• Oylik (30 kun): <b>{float(monthly_rev):,.0f} so'm</b>\n"
+        f"• Jami aylanma: <b>{float(total_revenue):,.0f} so'm</b>\n"
+        f"• O'rtacha buyurtma: <b>{float(avg_order):,.0f} so'm</b>\n\n"
         f"🛍 Faol mahsulotlar: <b>{total_products} ta</b>\n"
         f"⏳ Kutilayotgan to'lov cheklari: <b>{pending_balance} ta</b>"
     )
 
     builder = InlineKeyboardBuilder()
     builder.button(text="📜 Oxirgi tranzaksiyalar", callback_data="adm_tx_history")
+    builder.button(text="🔄 Yangilash", callback_data="adm_stats_refresh")
+    builder.adjust(1)
     await message.answer(text, reply_markup=builder.as_markup())
 
 
@@ -136,6 +157,25 @@ async def show_tx_history(callback: CallbackQuery, session: AsyncSession):
 
     await callback.message.answer("\n".join(lines))
     await callback.answer()
+
+
+@router.callback_query(F.data == "adm_stats_refresh")
+async def refresh_statistics(callback: CallbackQuery, session: AsyncSession):
+    await show_statistics(callback.message, session)
+    await callback.answer("✅ Statistika yangilandi!")
+
+
+@router.message(F.text == "🔍 Qidirish")
+async def global_search(message: Message, state: FSMContext):
+    await state.set_state(AdminStates.waiting_for_user_search)
+    await message.answer(
+        "🔍 <b>Global qidiruv:</b>\n\n"
+        "Qidirmoqchi bo'lgan narsani kiriting:\n"
+        "• Foydalanuvchi ID yoki @username\n"
+        "• Buyurtma raqami\n"
+        "• Mahsulot nomi\n\n"
+        "Bekor qilish uchun: /cancel"
+    )
 
 
 # ───────────────────────────────────────────
