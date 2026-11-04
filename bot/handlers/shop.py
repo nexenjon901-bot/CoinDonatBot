@@ -7,7 +7,7 @@ from typing import Callable
 import os
 from decimal import Decimal
 
-from core.utils import format_money, premium_emoji
+from core.utils import format_money
 from services.wallet import debit, TransactionType, InsufficientFunds
 from sqlalchemy import text
 
@@ -28,6 +28,15 @@ router = Router()
 
 SHOP_BANNER = "bot/images/shop.png"
 PRODUCT_BANNER = "bot/images/product_detail.png"
+
+
+def _shop_text() -> str:
+    from core.emojis import pe
+    return (
+        f"{pe('shop')} <b>Do'kon</b>\n\n"
+        "<blockquote>Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
+        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi.</blockquote>"
+    )
 
 
 async def _get_banner(path: str):
@@ -54,15 +63,10 @@ async def show_shop(message: Message, session: AsyncSession, db_user: User, _: C
         )
         return
 
-    from core.emojis import pe
-    text = (
-        f"{pe('shop')} <b>Do'kon</b>\n\n"
-        "<blockquote>Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
-        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi.</blockquote>"
-    )
     keyboard = get_categories_keyboard(categories, with_back=True)
 
-    await message.answer(text, reply_markup=keyboard)
+    from core.ui import answer_with_banner
+    await answer_with_banner(message, SHOP_BANNER, _shop_text(), keyboard)
 
 
 @router.callback_query(F.data == "shop_back_cats")
@@ -74,17 +78,8 @@ async def back_to_categories(callback: CallbackQuery, session: AsyncSession):
     categories = cats_result.scalars().all()
     keyboard = get_categories_keyboard(categories, with_back=True)
 
-    from core.emojis import pe
-    text = (
-        f"{pe('shop')} <b>Do'kon</b>\n\n"
-        "<blockquote>Mahsulotni tanlang — to'lov to'g'ridan-to'g'ri\n"
-        "balansingizdan yechiladi va ma'lumotlar bir lahzada beriladi.</blockquote>"
-    )
-
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=keyboard)
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=keyboard)
+    from core.ui import show_page
+    await show_page(callback, _shop_text(), keyboard, SHOP_BANNER)
     await callback.answer()
 
 
@@ -109,16 +104,9 @@ async def show_category_products(callback: CallbackQuery, session: AsyncSession)
     products = prods_result.scalars().all()
 
     keyboard = get_products_keyboard(products, cat_id)
-    cat_emoji = premium_emoji(cat.emoji_id, cat.emoji or "🎮") if getattr(cat, "emoji_id", None) else (cat.emoji or "🎮")
-    text = f"🛍 <b>Do'kon</b>\n\n{cat_emoji} <b>{cat.name}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
 
-    try:
-        await callback.message.edit_text(text=text, reply_markup=keyboard)
-    except Exception:
-        try:
-            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
-        except Exception:
-            await callback.message.answer(text, reply_markup=keyboard)
+    from core.ui import show_page
+    await show_page(callback, _shop_text(), keyboard, SHOP_BANNER)
     await callback.answer()
 
 
@@ -135,31 +123,26 @@ async def show_product_detail(callback: CallbackQuery, session: AsyncSession):
         await callback.answer("Mahsulot topilmadi!", show_alert=True)
         return
 
-    price_usd = f"${prod.price_usd:.2f}" if prod.price_usd else ""
-    status_text = f"{prod.quantity} dona" if prod.quantity > 0 else "Mavjud emas"
+    from core.ui import USD_RATE
+    price_usd = f"${float(prod.price_usd) if prod.price_usd else float(prod.price_uzs) / USD_RATE:.2f}"
+    status_text = f"{prod.quantity} dona"
     description = prod.description or "Avtomatik yetkazib berish."
 
-    is_uc_prod = getattr(prod, "product_type", "account") == "uc"
-    prod_icon = premium_emoji("5368324170671202286", "💎") if is_uc_prod else "🎮"
     from core.emojis import pe
     text = (
-        f"{pe('shop')} <b>Do'kon</b>\n\n"
         f"{pe('pubg')} <b>{prod.name}</b>\n\n"
-        f"{pe('money')} Narxi: <b>{prod.price_uzs:,.0f} so'm ({price_usd})</b>\n"
-        f"{pe('package')} Mavjud: <b>{status_text}</b>\n"
-        f"{pe('useful')} Tavsif: <i>{description}</i>\n\n"
+        f"<blockquote>"
+        f"{pe('money')} Narxi: {prod.price_uzs:,.0f} so'm ({price_usd})\n"
+        f"{pe('package')} Mavjud: {status_text}\n"
+        f"{pe('useful')} Tavsif: {description}"
+        f"</blockquote>\n\n"
         f"<i>Xarid qilish uchun quyidagi tugmani bosing:</i>"
     )
 
     keyboard = get_product_detail_keyboard(prod)
 
-    try:
-        await callback.message.edit_text(text=text, reply_markup=keyboard)
-    except Exception:
-        try:
-            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
-        except Exception:
-            await callback.message.answer(text, reply_markup=keyboard)
+    from core.ui import show_page
+    await show_page(callback, text, keyboard, SHOP_BANNER)
     await callback.answer()
 
 
@@ -180,19 +163,11 @@ async def back_to_product_list(callback: CallbackQuery, session: AsyncSession):
         .order_by(Product.price_uzs)
     )
     products = prods_result.scalars().all()
-    cat = await session.get(Category, cat_id)
 
     keyboard = get_products_keyboard(products, cat_id)
-    cat_emoji_b = premium_emoji(cat.emoji_id, cat.emoji or "🎮") if cat and getattr(cat, "emoji_id", None) else (cat.emoji if cat else "🎮")
-    text = f"🛍 <b>Do'kon</b>\n\n{cat_emoji_b} <b>{cat.name if cat else 'Kategoriya'}</b>\n\nQuyidagi mahsulotlardan birini tanlang:"
 
-    try:
-        await callback.message.edit_text(text=text, reply_markup=keyboard)
-    except Exception:
-        try:
-            await callback.message.edit_caption(caption=text, reply_markup=keyboard)
-        except Exception:
-            await callback.message.answer(text, reply_markup=keyboard)
+    from core.ui import show_page
+    await show_page(callback, _shop_text(), keyboard, SHOP_BANNER)
     await callback.answer()
 
 

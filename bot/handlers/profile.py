@@ -52,25 +52,29 @@ async def _build_profile_text(db_user: User, session: AsyncSession) -> str:
     balance = float(db_user.balance or 0)
     total_spent = float(db_user.total_spent or 0)
     username = f"@{db_user.username}" if db_user.username else "—"
-    # Audit #9: date format changed to DD.MM.YYYY
-    joined = db_user.created_at.strftime("%d.%m.%Y") if db_user.created_at else "—"
+    joined = db_user.created_at.strftime("%b %d, %Y") if db_user.created_at else "—"
 
     balance_usd = balance / USD_RATE
     sum24_usd = float(sum24) / USD_RATE
     sum7_usd = float(sum7) / USD_RATE
     sumall_usd = float(sumall) / USD_RATE
 
+    spent_usd = total_spent / USD_RATE
+
     from core.emojis import pe
     text = (
         f"{pe('profile')} <b>Sizning profilingiz</b>\n\n"
-        f"• {pe('id')} ID: <code>{db_user.telegram_id}</code>\n"
+        f"<blockquote>"
+        f"• ID: {db_user.telegram_id}\n"
         f"• Username: {username}\n"
-        f"• {pe('date')} Ro'yxatdan o'tgan: {joined}\n"
-        f"• {pe('card')} Balans: <b>${balance_usd:.2f} ({balance:,.0f} so'm)</b>\n\n"
-        f"{pe('stat')} <b>Xaridlar statistikasi:</b>\n"
+        f"• Ro'yxatdan o'tgan: {joined}\n"
+        f"• Balans: ${balance_usd:.2f} ({balance:,.0f} so'm)\n"
+        f"• Jami sarflangan: ${spent_usd:.2f} ({total_spent:,.0f} so'm)\n\n"
+        f"Xaridlar:\n"
         f"• 24 soat: {cnt24} dona / ${sum24_usd:.2f}\n"
         f"• 7 kun: {cnt7} dona / ${sum7_usd:.2f}\n"
         f"• Barcha vaqt: {cntall} dona / ${sumall_usd:.2f}"
+        f"</blockquote>"
     )
     return text
 
@@ -99,7 +103,8 @@ async def show_profile(message: Message, session: AsyncSession, db_user: User):
     text = await _build_profile_text(db_user, session)
     keyboard = _get_profile_keyboard()
 
-    await message.answer(text, reply_markup=keyboard)
+    from core.ui import answer_with_banner
+    await answer_with_banner(message, PROFILE_BANNER, text, keyboard)
 
 
 # ───────────────────────────────────────────
@@ -118,10 +123,11 @@ async def show_orders_history(callback: CallbackQuery, session: AsyncSession, db
 
     builder = InlineKeyboardBuilder()
 
+    from core.emojis import create_button, pe
     if not orders:
-        text = "📋 <b>Buyurtmalar tarixi</b>\n\nSiz hali hech narsa sotib olmadingiz."
+        text = f"{pe('orders')} <b>Buyurtmalar tarixi</b>\n\nSiz hali hech qanday xarid amalga oshirmagansiz."
     else:
-        lines = ["📋 <b>Buyurtmalar tarixi</b>\n\nSo'nggi 10 ta buyurtmangiz:\n"]
+        lines = [f"{pe('orders')} <b>Buyurtmalar tarixi</b>\n\nSo'nggi 10 ta buyurtmangiz:\n"]
         for o in orders:
             date = o.created_at.strftime("%d.%m.%Y") if o.created_at else "—"
             status_val = o.status.value if o.status else ""
@@ -141,12 +147,12 @@ async def show_orders_history(callback: CallbackQuery, session: AsyncSession, db
     # 2 ta tugma qatoriga joylashtirish
     builder.adjust(2)
     # Orqaga tugmasi alohida qatorga
-    builder.button(text="↩️ Orqaga", callback_data="profile_back_detail")
+    back_row = InlineKeyboardBuilder()
+    back_row.add(create_button("Orqaga", emoji_key="back", callback_data="profile_back_detail"))
+    builder.attach(back_row)
 
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+    from core.ui import show_page
+    await show_page(callback, text, builder.as_markup())
     await callback.answer()
 
 
@@ -253,45 +259,40 @@ async def view_order_details(callback: CallbackQuery, session: AsyncSession, db_
 
 @router.callback_query(F.data == "profile_discounts")
 async def show_discounts(callback: CallbackQuery):
-    from core.config import config
+    from core.emojis import create_button, pe
+    from core.ui import show_page
 
     text = (
-        "🎁 <b>Chegirmalar</b>\n\n"
-        "Hozircha faol chegirmalar mavjud emas.\n\n"
-        "Yangi chegirmalar va aksiyalar haqida kanalimizni kuzating!"
+        f"{pe('discounts')} <b>Chegirmalar va Promokodlar</b>\n\n"
+        "🎁 Hozirda faol aksiyalar mavjud emas.\n"
+        "Yangi chegirmalar haqida bot kanalida e'lon qilinadi!"
     )
     builder = InlineKeyboardBuilder()
-    # Audit #11: add channel URL button BEFORE the "Orqaga" button
-    builder.button(text="📢 Kanalga o'tish", url=config.SUPPORT_URL)
-    builder.button(text="↩️ Orqaga", callback_data="profile_back_detail")
-    builder.adjust(1)
-
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+    builder.add(create_button("Orqaga", emoji_key="back", callback_data="profile_back_detail"))
+    await show_page(callback, text, builder.as_markup())
     await callback.answer()
 
 
 @router.callback_query(F.data == "profile_change_lang")
-async def ask_language_change(callback: CallbackQuery):
+async def ask_language_change(callback: CallbackQuery, db_user: User):
+    from core.emojis import create_button, pe
+    from core.ui import show_page
+
+    langs = {"uz": "🇺🇿 O'zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
+    current = db_user.language if db_user.language in langs else "uz"
+
     builder = InlineKeyboardBuilder()
-    builder.button(text="🇺🇿 O'zbek tili", callback_data="setlang_uz")
-    builder.button(text="🇷🇺 Русский",     callback_data="setlang_ru")
-    builder.button(text="🇬🇧 English",     callback_data="setlang_en")
-    builder.button(text="↩️ Orqaga",       callback_data="profile_back_detail")
+    for code, label in langs.items():
+        builder.button(text=f"{label} ✅" if code == current else label, callback_data=f"setlang_{code}")
+    builder.add(create_button("Orqaga", emoji_key="back", callback_data="profile_back_detail"))
     builder.adjust(1)
 
-    try:
-        await callback.message.edit_caption(
-            caption="🌐 <b>Tilni tanlang / Выберите язык / Choose language:</b>",
-            reply_markup=builder.as_markup()
-        )
-    except Exception:
-        await callback.message.edit_text(
-            text="🌐 <b>Tilni tanlang / Выберите язык / Choose language:</b>",
-            reply_markup=builder.as_markup()
-        )
+    text = (
+        f"{pe('lang')} <b>Bot tilini tanlang / Выберите язык / Choose language:</b>\n\n"
+        f"Hozirgi til: {langs[current]}"
+    )
+    await show_page(callback, text, builder.as_markup())
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("setlang_"))
@@ -305,42 +306,25 @@ async def set_language(callback: CallbackQuery, session: AsyncSession, db_user: 
         "ru": "✅ Язык изменён: 🇷🇺 Русский",
         "en": "✅ Language changed: 🇬🇧 English",
     }
+    from core.emojis import create_button
+    from core.ui import show_page
     builder = InlineKeyboardBuilder()
-    builder.button(text="↩️ Profilga qaytish",
-                   callback_data="profile_back_detail")
-    builder.adjust(1)
-
-    try:
-        await callback.message.edit_caption(caption=confirms[lang], reply_markup=builder.as_markup())
-    except Exception:
-        await callback.message.edit_text(text=confirms[lang], reply_markup=builder.as_markup())
+    builder.add(create_button("Profilga qaytish", emoji_key="back", callback_data="profile_back_detail"))
+    await show_page(callback, confirms[lang], builder.as_markup())
+    await callback.answer()
 
 
 @router.callback_query(F.data == "profile_back_detail")
 async def profile_back_to_detail(callback: CallbackQuery, session: AsyncSession, db_user: User):
     text = await _build_profile_text(db_user, session)
     keyboard = _get_profile_keyboard()
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=keyboard)
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=keyboard)
+    from core.ui import show_page
+    await show_page(callback, text, keyboard, PROFILE_BANNER)
     await callback.answer()
 
 
 @router.callback_query(F.data == "profile_back")
 async def profile_back_main(callback: CallbackQuery):
-    from bot.handlers.registration import get_main_menu_keyboard
-    from core.config import config
-    is_admin = callback.from_user.id == config.ADMIN_ID
-
-    # Audit main menu text: use <blockquote> format
-    text = (
-        "👋 <b>Salom!</b>\n\n"
-        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
-        "Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
-    )
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
+    from core.ui import show_main_menu
+    await show_main_menu(callback)
     await callback.answer()

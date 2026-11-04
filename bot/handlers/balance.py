@@ -6,7 +6,6 @@ from sqlalchemy import select
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import Callable
 import os
-import random
 
 from bot.states.balance import BalanceFill
 from core.logger import logger
@@ -27,15 +26,24 @@ async def _send_balance_menu(target, text: str, keyboard):
         from core.ui import answer_with_banner
         await answer_with_banner(target, banner_path, text, keyboard)
     else:  # CallbackQuery
-        try:
-            await target.message.edit_caption(caption=text, reply_markup=keyboard)
-        except Exception:
-            await target.message.edit_text(text=text, reply_markup=keyboard)
+        from core.ui import show_page
+        await show_page(target, text, keyboard, banner_path)
 
 
 # ───────────────────────────────────────────
 # HISOBNI TO'LDIRISH — Asosiy
 # ───────────────────────────────────────────
+
+def _balance_menu_text(pe, prefix: str = "") -> str:
+    from core.ui import format_uzs
+    return (
+        f"{pe('balance')} <b>Balansni to'ldirish</b>\n\n"
+        f"{prefix}"
+        f"<blockquote>Hisobingizni to'ldirish uchun qulay to'lov usulini tanlang.\n"
+        f"Minimal to'lov: {format_uzs(MIN_AMOUNT)} so'm</blockquote>\n\n"
+        f"<i>To'lov turini tanlang:</i>"
+    )
+
 
 async def show_balance_menu(message: Message, db_user: User):
     from core.emojis import create_button, pe
@@ -44,13 +52,7 @@ async def show_balance_menu(message: Message, db_user: User):
     builder.add(create_button("Orqaga", emoji_key="back", callback_data="balance_back"))
     builder.adjust(1)
 
-    text = (
-        f"{pe('balance')} <b>Hisobni to'ldirish</b>\n\n"
-        f"Hisobingizni to'ldirish uchun qulay to'lov usulini tanlang.\n"
-        f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
-        f"{pe('card')} Joriy balans: <b>{float(db_user.balance or 0):,.0f} so'm</b>\n\n"
-        f"<i>To'lov turini tanlang:</i>"
-    )
+    text = _balance_menu_text(pe)
 
     await _send_balance_menu(message, text, builder.as_markup())
 
@@ -61,42 +63,51 @@ async def show_balance_menu(message: Message, db_user: User):
 
 @router.callback_query(F.data == "balance_card_receipt")
 async def ask_balance_amount(callback: CallbackQuery, state: FSMContext):
+    from core.emojis import create_button, pe
+    from core.ui import format_uzs, show_page
     builder = InlineKeyboardBuilder()
-    builder.button(text="❌ Bekor qilish", callback_data="balance_back")
-    builder.adjust(1)
+    builder.add(create_button("Bekor qilish", emoji_key="back", callback_data="balance_back"))
 
     text = (
-        f"💸 <b>Hisobni to'ldirish</b>\n\n"
-        f"💳 <b>Karta orqali (Chek yuborish)</b>\n\n"
-        f"Qancha miqdorda to'ldirmoqchisiz?\n"
-        f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
-        f"Miqdorni raqamda kiriting (masalan: <code>50000</code>):"
+        f"{pe('card')} <b>Uzcard / Humo to'lov (Chek orqali)</b>\n\n"
+        f"<blockquote>Hisobingizga qancha summa o'tkazmoqchi ekanligingizni so'mda yozib yuboring.\n"
+        f"Masalan: <code>10000</code> yoki <code>50000</code>\n"
+        f"Minimal to'lov: {format_uzs(MIN_AMOUNT)} so'm</blockquote>"
     )
 
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
+    await show_page(callback, text, builder.as_markup(), BALANCE_BANNER)
 
     await state.set_state(BalanceFill.waiting_for_amount)
     await callback.answer()
+
+
+def _cancel_keyboard(callback_data: str):
+    from core.emojis import create_button
+    builder = InlineKeyboardBuilder()
+    builder.add(create_button("Bekor qilish", emoji_key="back", callback_data=callback_data))
+    return builder.as_markup()
 
 
 @router.message(BalanceFill.waiting_for_amount, F.text)
 async def process_balance_amount(message: Message, state: FSMContext, session: AsyncSession):
     text_raw = message.text.replace(" ", "").replace(",", "")
     if not text_raw.isdigit():
-        await message.answer("❌ Iltimos, faqat raqam kiriting!\nMasalan: <code>50000</code>")
+        await message.answer("❌ Iltimos, faqat raqam kiriting!\nMasalan: <code>50000</code>", reply_markup=_cancel_keyboard("balance_back"))
         return
 
     amount = int(text_raw)
     if amount < MIN_AMOUNT:
-        await message.answer(f"❌ Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\nBoshqa miqdor kiriting:")
+        from core.emojis import pe
+        from core.ui import format_uzs
+        await message.answer(
+            f"{pe('warn')} <b>Minimal to'ldirish summasi: {format_uzs(MIN_AMOUNT)} so'm</b>\n"
+            f"Iltimos, qaytadan kiriting:",
+            reply_markup=_cancel_keyboard("balance_back"),
+        )
         return
 
-    # Noyob summa: asosiy summaga tasodifiy 2 xonali tiyinlar qo'shish
-    random_cents = random.randint(1, 99)
-    display_amount = f"{amount:,},{random_cents:02d} so'm"
+    from core.ui import format_uzs
+    display_amount = f"{format_uzs(amount)} so'm"
 
     await state.update_data(amount=amount, display_amount=display_amount)
 
@@ -114,22 +125,19 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
     phone_obj = phone_res.scalar_one_or_none()
     phone = phone_obj.value if phone_obj else getattr(config, "PAYMENT_PHONE", "")
 
-    builder = InlineKeyboardBuilder()
-    builder.button(text="❌ Bekor qilish", callback_data="balance_cancel_state")
-    builder.adjust(1)
-
     from core.emojis import pe
     text = (
         f"{pe('card')} <b>To'lov uchun rekvizitlar:</b>\n\n"
-        f"• {pe('money')} To'lov summasi: <b>{display_amount}</b>\n"
-        f"• {pe('card')} Karta raqami: <code>{card_number}</code>\n"
-        f"• {pe('id')} Karta egasi: <b>{card_owner}</b>\n"
-        f"• {pe('support')} Ulangan raqam: <code>{phone}</code>\n\n"
-        f"{pe('warn')} To'lovni amalga oshirgach, ushbu botga to'lov cheki (skrinshot)ni yuboring.\n"
+        f"{pe('money')} <b>To'lov summasi: {display_amount}</b>\n"
+        f"{pe('card')} <b>Karta raqami:</b> <code>{card_number}</code>\n"
+        f"{pe('profile')} <b>Karta egasi: {card_owner}\n"
+        f"ULANGAN NUMER {phone}</b>\n\n"
+        f"📥 <b>To'lovni amalga oshirgach:</b>\n"
+        f"Ushbu botga to'lov <b>cheki (skrinshot)</b>ni yuboring. "
         f"Tekshirilib, hisobingizga darhol mablag' qo'shiladi!"
     )
 
-    await message.answer(text, reply_markup=builder.as_markup())
+    await message.answer(text, reply_markup=_cancel_keyboard("balance_cancel_state"))
 
     await state.set_state(BalanceFill.waiting_for_receipt)
 
@@ -196,19 +204,8 @@ async def process_balance_receipt(message: Message, state: FSMContext, session: 
 @router.callback_query(F.data == "balance_back")
 async def balance_back(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    from bot.handlers.registration import get_main_menu_keyboard
-    from core.config import config
-    is_admin = callback.from_user.id == config.ADMIN_ID
-
-    text = (
-        "👋 <b>Salom!</b>\n\n"
-        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
-        "Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
-    )
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
+    from core.ui import show_main_menu
+    await show_main_menu(callback)
     await callback.answer()
 
 
@@ -217,22 +214,11 @@ async def balance_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
     # Foydalanuvchini to'lov turi tanlash ekraniga qaytarish
+    from core.emojis import create_button, pe
     builder = InlineKeyboardBuilder()
-    builder.button(text="💳 Karta orqali (Chek yuborish)",
-                   callback_data="balance_card_receipt")
-    builder.button(text="↩️ Orqaga", callback_data="balance_back")
+    builder.add(create_button("Karta orqali (Chek yuborish)", emoji_key="card", callback_data="balance_card_receipt"))
+    builder.add(create_button("Orqaga", emoji_key="back", callback_data="balance_back"))
     builder.adjust(1)
 
-    text = (
-        f"💸 <b>Hisobni to'ldirish</b>\n\n"
-        f"❌ <b>Bekor qilindi.</b>\n\n"
-        f"Minimal to'ldirish summasi: <b>{MIN_AMOUNT:,} so'm</b>\n\n"
-        f"<i>To'lov turini tanlang:</i>"
-    )
-
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=builder.as_markup())
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
-
+    await _send_balance_menu(callback, _balance_menu_text(pe), builder.as_markup())
     await callback.answer("❌ Bekor qilindi.")

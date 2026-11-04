@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardMarkup
 from typing import List
 from db.models.product import Category, Product
 from core.emojis import create_button
+from core.ui import USD_RATE
 
 
 def get_categories_keyboard(categories: List[Category], with_back: bool = True) -> InlineKeyboardMarkup:
@@ -23,13 +24,13 @@ def get_products_keyboard(products: List[Product], category_id: int) -> InlineKe
     for prod in products:
         is_uc = getattr(prod, "product_type", "account") == "uc"
         emoji_key = "pubg"
-        price_uzs = f"{float(prod.price_uzs):,.0f} so'm"
+        price_usd = float(prod.price_usd) if prod.price_usd else float(prod.price_uzs) / USD_RATE
+        price = f"${price_usd:.2f}"
 
         if is_uc:
-            text = f"{prod.name} — {price_uzs}"
+            text = f"{prod.name} — {price}"
         else:
-            status = f"{prod.quantity} dona" if prod.quantity > 0 else "Mavjud emas"
-            text = f"{prod.name} — {status} — {price_uzs}"
+            text = f"{prod.name} — {prod.quantity or 0} dona — {price}"
 
         builder.add(create_button(text, emoji_key=emoji_key, callback_data=f"shop_prod_{prod.id}"))
     builder.add(create_button("Orqaga", emoji_key="back", callback_data="shop_back_cats"))

@@ -57,20 +57,13 @@ async def start_handler(message: Message, state: FSMContext, session: AsyncSessi
             session.add(db_user)
             await session.commit()
 
-        first_name = db_user.first_name or "Do'st"
-        # Registration date in DD.MM.YYYY format
-        reg_date = db_user.created_at.strftime("%d.%m.%Y") if db_user.created_at else "—"
-        from core.emojis import pe
-        wave_icon = pe("wave")
-        date_icon = pe("date")
-        text = (
-            f"{wave_icon} <b>Salom, {first_name}!</b>\n\n"
-            f"<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
-            f"Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>\n\n"
-            f"{date_icon} Ro'yxatdan o'tgan sana: <b>{reg_date}</b>"
+        from core.ui import answer_with_banner, main_menu_caption
+        await answer_with_banner(
+            message,
+            banner_path=MAIN_MENU_BANNER,
+            text=main_menu_caption(db_user.first_name),
+            reply_markup=get_main_menu_keyboard(_, is_admin=is_admin),
         )
-
-        await message.answer(text, reply_markup=get_main_menu_keyboard(_, is_admin=is_admin))
         return
 
     # Ro'yxatdan o'tmagan — til tanlash
