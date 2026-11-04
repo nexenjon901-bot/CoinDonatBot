@@ -6,13 +6,34 @@ File ID keshlash orqali rasmlar bir marta yuklanadi, keyingi safar cache ishlati
 import os
 from typing import Optional
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InputMediaPhoto, FSInputFile
+from aiogram.types import (
+    Message, CallbackQuery, InlineKeyboardMarkup, InputMediaPhoto, FSInputFile, LinkPreviewOptions,
+)
 
 USD_RATE = 11880
 MIN_BALANCE_TOPUP = 10_000
 
 # Banner file_id keshlari — bir marta yuklanadi, keyingi safar tez ishlaydi
 _FILE_ID_CACHE: dict[str, str] = {}
+
+
+def _base_url() -> str:
+    from core.config import config
+    return (config.BANNER_BASE_URL or "").strip().rstrip("/")
+
+
+def _preview(banner_path: str = "") -> LinkPreviewOptions:
+    """
+    Banner havola ko'rinishida (ichkarida yumaloq rasm, chap tomonda chiziq) chiqadi.
+    Banner bo'lmasa — havola ko'rinishi o'chiriladi.
+    """
+    if not banner_path:
+        return LinkPreviewOptions(is_disabled=True)
+    return LinkPreviewOptions(
+        url=f"{_base_url()}/{banner_path.lstrip('/')}",
+        prefer_large_media=True,
+        show_above_text=True,
+    )
 
 
 def main_menu_caption(first_name: str) -> str:
@@ -48,6 +69,15 @@ async def answer_with_banner(
     if not banner_path:
         return await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
 
+    if _base_url():
+        try:
+            return await message.answer(
+                text, reply_markup=reply_markup, parse_mode="HTML",
+                link_preview_options=_preview(banner_path),
+            )
+        except Exception:
+            return await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+
     if banner_path in _FILE_ID_CACHE:
         photo = _FILE_ID_CACHE[banner_path]
     elif os.path.exists(banner_path):
@@ -75,12 +105,35 @@ async def show_page(
 ) -> None:
     """
     Callback xabarini yangi sahifa bilan almashtiradi.
-    - banner_path berilsa va xabar rasmli bo'lsa: rasm ham, matn ham almashadi (edit_media).
+    - BANNER_BASE_URL berilgan bo'lsa: banner havola ko'rinishida, xabar matni tahrirlanadi.
+    - Aks holda banner_path berilsa va xabar rasmli bo'lsa: rasm ham, matn ham almashadi (edit_media).
     - banner_path bo'sh va xabar matnli bo'lsa: oddiy edit_text.
     - Aks holda eski xabar o'chirilib, yangisi yuboriladi.
     """
     msg = callback.message
     has_photo = bool(msg.photo)
+
+    if _base_url():
+        # Havola ko'rinishidagi banner: xabar matni tahrirlanadi, rasm ham shu bilan almashadi
+        if not has_photo:
+            try:
+                await msg.edit_text(
+                    text, reply_markup=reply_markup, parse_mode="HTML",
+                    link_preview_options=_preview(banner_path),
+                )
+                return
+            except TelegramBadRequest as e:
+                if "message is not modified" in str(e):
+                    return
+            except Exception:
+                pass
+        try:
+            await msg.delete()
+        except Exception:
+            pass
+        await answer_with_banner(msg, banner_path, text, reply_markup)
+        return
+
     try:
         if banner_path and has_photo and (banner_path in _FILE_ID_CACHE or os.path.exists(banner_path)):
             media = _FILE_ID_CACHE.get(banner_path) or FSInputFile(banner_path)

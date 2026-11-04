@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Bot nomi (xabarlarda ko'rinadi)
     BOT_USERNAME: str = "coindonatbot"
 
+    # Banner rasmlari joylashgan ochiq manzil (havola ko'rinishida chiqadi).
+    # Bo'sh qoldirilsa banner oddiy rasm (photo) sifatida yuboriladi.
+    BANNER_BASE_URL: str = "https://raw.githubusercontent.com/nexenjon901-bot/CoinDonatBot/main"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8")
 

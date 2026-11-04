@@ -77,6 +77,47 @@ FALLBACK_ICONS = {
     "share": "↗️",
     "admin": "⚙️",
     "wave": "👋",
+    # ─── Qo'shimcha bo'limlar (botdagi boshqa joylar uchun) ───
+    "uc": "💎",
+    "receipt": "🧾",
+    "pending": "⏳",
+    "phone": "📱",
+    "add": "➕",
+    "minus": "➖",
+    "cart": "🛒",
+    "pin": "📌",
+    "gift": "🎁",
+    "folder": "📂",
+    "users": "👥",
+    "star": "🌟",
+    "lightning": "⚡",
+    "key": "🔑",
+    "cash": "💵",
+    "refresh": "🔄",
+    "question": "❓",
+    "online": "🟢",
+    "offline": "🔴",
+    "exchange": "💱",
+    "delete": "🗑",
+    "note": "📝",
+    "history": "📜",
+    "search": "🔍",
+    "tip": "💡",
+    "link": "🔗",
+    "inbox": "📥",
+    "home": "🏠",
+    "block": "🚫",
+    "party": "🎉",
+    "coin": "🪙",
+    "sad": "😔",
+    "alert": "❗",
+    "folderfile": "📁",
+}
+
+# Bitta kalitga bir nechta standart emoji bog'lash (admin bitta ID kiritadi — hammasi almashadi)
+EMOJI_ALIASES = {
+    "back": ["🔙", "⬅️"],
+    "share": ["↗"],
 }
 
 # Admin paneldagi nomlar
@@ -99,6 +140,46 @@ EMOJI_LABELS = {
     "package": "📦 Mahsulot / Stok",
     "verify": "✅ Bajarildi / Tasdiq",
     "post": "📢 E'lonlar va Postlar",
+    "back": "↩️ Orqaga tugmasi",
+    "cancel": "❌ Bekor qilish / Xato",
+    "warn": "⚠️ Ogohlantirish",
+    "share": "↗️ Ulashish / Havola",
+    "admin": "⚙️ Admin panel / Sozlamalar",
+    "wave": "👋 Salomlashish",
+    "uc": "💎 UC mahsulot",
+    "receipt": "🧾 Buyurtma / Chek",
+    "pending": "⏳ Kutilmoqda",
+    "phone": "📱 Telefon",
+    "add": "➕ Qo'shish",
+    "minus": "➖ Ayirish",
+    "cart": "🛒 Savat / Xarid",
+    "pin": "📌 Belgi (Raqam, Holat)",
+    "gift": "🎁 Sovg'a / Bonus",
+    "folder": "📂 Kategoriyalar",
+    "users": "👥 Foydalanuvchilar",
+    "star": "🌟 Premium / Yulduz",
+    "lightning": "⚡ Tezkor",
+    "key": "🔑 Kalit / Ma'lumot",
+    "cash": "💵 Naqd pul",
+    "refresh": "🔄 Yangilash",
+    "question": "❓ Noma'lum",
+    "online": "🟢 Faol",
+    "offline": "🔴 Nofaol",
+    "exchange": "💱 Valyuta kursi",
+    "delete": "🗑 O'chirish",
+    "note": "📝 Tavsif",
+    "history": "📜 Tarix",
+    "search": "🔍 Qidirish",
+    "tip": "💡 Maslahat",
+    "link": "🔗 Havola",
+    "inbox": "📥 Qabul qilish",
+    "home": "🏠 Bosh menyu",
+    "block": "🚫 Bloklash",
+    "party": "🎉 Tabrik",
+    "coin": "🪙 Coin Donat",
+    "sad": "😔 Afsus",
+    "alert": "❗ Muhim",
+    "folderfile": "📁 Papka",
 }
 
 
@@ -143,6 +224,116 @@ def pe(key: str, fallback: Optional[str] = None) -> str:
 
 def format_header_emoji(key: str) -> str:
     return pe(key)
+
+
+# ───────────────────────────────────────────
+# Avtomatik premium emoji (barcha xabar va tugmalar uchun)
+# ───────────────────────────────────────────
+
+_TG_EMOJI_RE = re.compile(r"(<tg-emoji\b[^>]*>.*?</tg-emoji>)", re.DOTALL)
+_rx_cache: tuple = (None, None, {})
+
+
+def _active_glyphs() -> dict[str, str]:
+    """ID o'rnatilgan kalitlarning standart emojilari: {emoji: custom_emoji_id}"""
+    active: dict[str, str] = {}
+    for key, glyph in FALLBACK_ICONS.items():
+        eid = get_emoji_id(key)
+        if not eid:
+            continue
+        for g in [glyph, *EMOJI_ALIASES.get(key, [])]:
+            active[g.replace("\ufe0f", "")] = eid
+    return active
+
+
+def _get_matcher():
+    """(regex, {emoji: id}) — faqat ID o'rnatilgan emojilar uchun; kesh bilan"""
+    global _rx_cache
+    active = _active_glyphs()
+    signature = tuple(sorted(active.items()))
+    if _rx_cache[0] == signature:
+        return _rx_cache[1], _rx_cache[2]
+    if not active:
+        _rx_cache = (signature, None, {})
+        return None, {}
+    alts = sorted(active, key=len, reverse=True)
+    rx = re.compile("(?:" + "|".join(re.escape(a) for a in alts) + ")\ufe0f?")
+    _rx_cache = (signature, rx, active)
+    return rx, active
+
+
+def premiumize_text(text: str) -> str:
+    """HTML matndagi standart emojilarni <tg-emoji> ga almashtiradi (faqat ID o'rnatilganlarini)"""
+    rx, active = _get_matcher()
+    if not rx or not text:
+        return text
+
+    def _wrap(m):
+        eid = active.get(m.group(0).replace("\ufe0f", ""))
+        return f'<tg-emoji emoji-id="{eid}">{m.group(0)}</tg-emoji>' if eid else m.group(0)
+
+    parts = _TG_EMOJI_RE.split(text)
+    for i in range(0, len(parts), 2):  # juft indekslar — tg-emoji dan tashqari qismlar
+        parts[i] = rx.sub(_wrap, parts[i])
+    return "".join(parts)
+
+
+def premiumize_markup(markup):
+    """Inline tugma matnidagi bosh emojini icon_custom_emoji_id ga aylantiradi"""
+    rx, active = _get_matcher()
+    rows = getattr(markup, "inline_keyboard", None)
+    if not rx or not rows:
+        return markup
+    changed = False
+    new_rows = []
+    for row in rows:
+        new_row = []
+        for btn in row:
+            m = rx.match(btn.text or "")
+            rest = (btn.text or "")[m.end():].strip() if m else ""
+            eid = active.get(m.group(0).replace("\ufe0f", "")) if m else None
+            if eid and rest and not getattr(btn, "icon_custom_emoji_id", None):
+                btn = btn.model_copy(update={"text": rest, "icon_custom_emoji_id": eid})
+                changed = True
+            new_row.append(btn)
+        new_rows.append(new_row)
+    return markup.model_copy(update={"inline_keyboard": new_rows}) if changed else markup
+
+
+def _set_attr(obj, name: str, value) -> None:
+    try:
+        setattr(obj, name, value)
+    except Exception:
+        obj.__dict__[name] = value
+
+
+def _is_html(parse_mode) -> bool:
+    # None — oddiy matn; Default(...) — botning standart HTML rejimi
+    return parse_mode is not None and (not isinstance(parse_mode, str) or parse_mode.upper() == "HTML")
+
+
+def apply_premium_emojis(method) -> None:
+    """Telegram'ga ketayotgan so'rovdagi matn, izoh va tugmalarga premium emojilarni qo'llaydi"""
+    if not _get_matcher()[0]:
+        return
+    if _is_html(getattr(method, "parse_mode", None)):
+        for attr in ("text", "caption"):
+            value = getattr(method, attr, None)
+            if isinstance(value, str) and value:
+                new_value = premiumize_text(value)
+                if new_value != value:
+                    _set_attr(method, attr, new_value)
+        media = getattr(method, "media", None)
+        caption = getattr(media, "caption", None)
+        if isinstance(caption, str) and caption and _is_html(getattr(media, "parse_mode", None)):
+            new_caption = premiumize_text(caption)
+            if new_caption != caption:
+                _set_attr(method, "media", media.model_copy(update={"caption": new_caption}))
+    markup = getattr(method, "reply_markup", None)
+    if markup is not None and hasattr(markup, "inline_keyboard"):
+        new_markup = premiumize_markup(markup)
+        if new_markup is not markup:
+            _set_attr(method, "reply_markup", new_markup)
 
 
 def create_button(
