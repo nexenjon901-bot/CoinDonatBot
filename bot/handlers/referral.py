@@ -9,6 +9,8 @@ from core.config import config
 
 router = Router()
 
+REFERRAL_BANNER = "bot/images/referral_v2.png"
+
 
 from core.utils import format_money
 from services.wallet import credit, TransactionType
@@ -117,11 +119,12 @@ async def show_referral(message: Message, session: AsyncSession, db_user: User):
     builder.button(text="↗️ Do'stlarga ulashish", url=share_url)
 
     if float(db_user.ref_balance or 0) >= await _get_min_withdrawal(session):
-        builder.button(text="💳 Asosiy balansga o'tkazish", callback_data="ref_withdraw")
-
-    # Fix #6: back button uses "menu_back" (not "menu_back_main")
+        builder.button(text="� Asosiy balansga o'tkazish", callback_data="ref_withdraw")
     builder.button(text="↩️ Orqaga", callback_data="menu_back")
     builder.adjust(1)
+
+    from core.ui import answer_with_banner
+    await answer_with_banner(message, REFERRAL_BANNER, text, builder.as_markup())
 
     try:
         if isinstance(message, CallbackQuery):

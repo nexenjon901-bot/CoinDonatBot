@@ -4,7 +4,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 router = Router()
 
-USEFUL_BANNER = "bot/images/useful.png"
+USEFUL_BANNER = "bot/images/useful_v2.png"
 
 
 async def show_useful(message: Message):
