@@ -125,9 +125,9 @@ async def show_orders_history(callback: CallbackQuery, session: AsyncSession, db
 
     from core.emojis import create_button, pe
     if not orders:
-        text = f"{pe('orders')} <b>Buyurtmalar tarixi</b>\n\nSiz hali hech qanday xarid amalga oshirmagansiz."
+        text = f"{pe('orders')} <b>Buyurtmalar tarixi</b>\n\n<blockquote>Siz hali hech qanday xarid amalga oshirmagansiz.</blockquote>"
     else:
-        lines = [f"{pe('orders')} <b>Buyurtmalar tarixi</b>\n\nSo'nggi 10 ta buyurtmangiz:\n"]
+        lines = []
         for o in orders:
             date = o.created_at.strftime("%d.%m.%Y") if o.created_at else "—"
             status_val = o.status.value if o.status else ""
@@ -142,7 +142,11 @@ async def show_orders_history(callback: CallbackQuery, session: AsyncSession, db
             # Har bir buyurtma uchun tugma
             builder.button(text=f"{icon} {o.order_number}", callback_data=f"order_view_{o.id}")
             
-        text = "\n".join(lines)
+        text = (
+            f"{pe('orders')} <b>Buyurtmalar tarixi</b>\n\n"
+            f"<blockquote>" + "\n".join(lines) + "</blockquote>\n\n"
+            f"<i>So'nggi 10 ta buyurtma. Tafsilot uchun raqamni bosing.</i>"
+        )
 
     # 2 ta tugma qatoriga joylashtirish
     builder.adjust(2)
@@ -202,13 +206,15 @@ async def view_order_details(callback: CallbackQuery, session: AsyncSession, db_
 
         text_msg = (
             f"🧾 <b>Buyurtma tafsiloti</b>\n\n"
+            f"<blockquote>"
             f"📌 <b>Raqam:</b> <code>{order.order_number}</code>\n"
             f"{uc_icon} <b>Mahsulot:</b> {prod_name}\n"
             f"🆔 <b>PUBG Player ID:</b> <code>{player_id_str}</code>\n"
             f"💰 <b>Narxi:</b> {price_str}\n"
             f"📅 <b>Sana:</b> {date_str}\n"
-            f"📌 <b>Holat:</b> {status_text}\n\n"
-            f"<i>UC qo'shilganda holat 'Bajarildi' ga o'zgaradi.</i>"
+            f"📌 <b>Holat:</b> {status_text}"
+            f"</blockquote>\n\n"
+            f"<blockquote>UC qo'shilganda holat «Bajarildi» ga o'zgaradi.</blockquote>"
         )
     else:
         # ═══ Akkaunt buyurtmasi — stock_items dan ═══
@@ -221,12 +227,15 @@ async def view_order_details(callback: CallbackQuery, session: AsyncSession, db_
         if not row:
             # Eski tizim yoki ma'lumot yo'q
             text_msg = (
-                f"🧾 <b>Buyurtma:</b> <code>{order.order_number}</code>\n"
+                f"🧾 <b>Buyurtma tafsiloti</b>\n\n"
+                f"<blockquote>"
+                f"📌 <b>Raqam:</b> <code>{order.order_number}</code>\n"
                 f"🎮 <b>Mahsulot:</b> {prod_name}\n"
                 f"💰 <b>Narxi:</b> {price_str}\n"
                 f"📅 <b>Sana:</b> {date_str}\n"
-                f"📌 <b>Holat:</b> {status_text}\n\n"
-                f"⚠️ <i>Akkaunt ma'lumotlari topilmadi. Admin bilan bog'laning.</i>"
+                f"📌 <b>Holat:</b> {status_text}"
+                f"</blockquote>\n\n"
+                f"<blockquote>⚠️ Akkaunt ma'lumotlari topilmadi. Admin bilan bog'laning.</blockquote>"
             )
         else:
             try:
@@ -234,14 +243,19 @@ async def view_order_details(callback: CallbackQuery, session: AsyncSession, db_
             except Exception:
                 decrypted_data = "Ma'lumotni o'qishda xatolik yuz berdi."
 
+            from core.ui import FAKEMAIL_HINT
             text_msg = (
-                f"🧾 <b>Buyurtma:</b> <code>{order.order_number}</code>\n"
+                f"🧾 <b>Buyurtma tafsiloti</b>\n\n"
+                f"<blockquote>"
+                f"📌 <b>Raqam:</b> <code>{order.order_number}</code>\n"
                 f"🎮 <b>Mahsulot:</b> {prod_name}\n"
                 f"💰 <b>Narxi:</b> {price_str}\n"
                 f"📅 <b>Sana:</b> {date_str}\n"
-                f"📌 <b>Holat:</b> {status_text}\n\n"
+                f"📌 <b>Holat:</b> {status_text}"
+                f"</blockquote>\n\n"
                 f"🔑 <b>Akkaunt ma'lumotlari:</b>\n"
-                f"<code>{decrypted_data}</code>"
+                f"<blockquote><code>{decrypted_data}</code></blockquote>\n\n"
+                f"{FAKEMAIL_HINT}"
             )
 
     builder = InlineKeyboardBuilder()

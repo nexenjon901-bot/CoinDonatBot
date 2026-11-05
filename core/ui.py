@@ -173,5 +173,16 @@ async def show_main_menu(callback: CallbackQuery) -> None:
     )
 
 
+# Xariddan so'ng akkaunt ma'lumoti bilan birga ko'rsatiladigan yo'riqnoma
+FAKEMAIL_HINT = (
+    "<blockquote>"
+    "📥 <b>Ma'lumotni qanday olish kerak?</b>\n"
+    "1. @fakemailbot ga kiring va /start bosing.\n"
+    "2. Yuqoridagi <b>pochta (login) va parolni</b> botga yuboring.\n"
+    "3. Akkauntga kirishda kelgan <b>tasdiqlash kodini</b> shu bot orqali o'qib oling."
+    "</blockquote>"
+)
+
+
 def format_uzs(amount) -> str:
     return f"{float(amount):,.0f}".replace(",", " ")

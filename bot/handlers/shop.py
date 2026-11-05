@@ -540,6 +540,7 @@ async def confirm_purchase(callback: CallbackQuery, session: AsyncSession, db_us
         decrypted_data = "Ma'lumotni o'qishda xatolik. Admin bilan bog'laning."
         # Optionally update order status to DELIVERY_FAILED here
         
+    from core.ui import FAKEMAIL_HINT
     text_msg = (
         f"✅ <b>Xarid muvaffaqiyatli!</b>\n\n"
         f"<blockquote>"
@@ -549,7 +550,8 @@ async def confirm_purchase(callback: CallbackQuery, session: AsyncSession, db_us
         f"💳 Qolgan balans: <b>{format_money(db_user.balance)}</b>"
         f"</blockquote>\n\n"
         f"🔑 <b>Sizning ma'lumotlaringiz:</b>\n"
-        f"<code>{decrypted_data}</code>"
+        f"<blockquote><code>{decrypted_data}</code></blockquote>\n\n"
+        f"{FAKEMAIL_HINT}"
     )
 
     delivered = False
