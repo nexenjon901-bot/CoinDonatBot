@@ -26,8 +26,8 @@ from services.orders import generate_order_number
 
 router = Router()
 
-SHOP_BANNER = "bot/images/shop_v3.png"
-PRODUCT_BANNER = "bot/images/shop_v3.png"  # product_detail.png o'rniga shop_v2.png
+SHOP_BANNER = "bot/images/shop_v4.png"
+PRODUCT_BANNER = "bot/images/shop_v4.png"  # product_detail.png o'rniga shop_v2.png
 
 
 def _shop_text() -> str:
