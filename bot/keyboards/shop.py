@@ -32,7 +32,7 @@ def get_products_keyboard(products: List[Product], category_id: int) -> InlineKe
     builder = InlineKeyboardBuilder()
     for prod in products:
         is_uc = getattr(prod, "product_type", "account") == "uc"
-        emoji_key = "pubg"
+        emoji_key = "uc" if is_uc else "pubg"
         price_usd = float(prod.price_usd) if prod.price_usd else float(prod.price_uzs) / USD_RATE
         price = f"${price_usd:.2f}"
 
