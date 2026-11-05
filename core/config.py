@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Bot nomi (xabarlarda ko'rinadi)
     BOT_USERNAME: str = "coindonatbot"
 
+    # Buyurtma raqami prefiksi (masalan: ENT-2026-000003)
+    ORDER_PREFIX: str = "ENT"
+
     # Banner rasmlari joylashgan ochiq manzil (havola ko'rinishida chiqadi).
     # Bo'sh qoldirilsa banner oddiy rasm (photo) sifatida yuboriladi.
     BANNER_BASE_URL: str = "https://raw.githubusercontent.com/nexenjon901-bot/CoinDonatBot/main"

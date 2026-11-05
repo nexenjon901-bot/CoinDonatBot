@@ -1,5 +1,6 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import InlineKeyboardMarkup
+import re
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List
 from db.models.product import Category, Product
 from core.emojis import create_button
@@ -10,8 +11,16 @@ def get_categories_keyboard(categories: List[Category], with_back: bool = True) 
     """Kategoriyalar ro'yxati uchun inline klaviatura (Premium emoji bilan)"""
     builder = InlineKeyboardBuilder()
     for cat in categories:
-        emoji_key = "pubg"
-        builder.add(create_button(cat.name, emoji_key=emoji_key, callback_data=f"shop_cat_{cat.id}"))
+        cat_eid = getattr(cat, "emoji_id", None)
+        if cat_eid:
+            # Admin tanlagan premium emoji (matndagi bosh emoji olib tashlanadi)
+            builder.add(InlineKeyboardButton(
+                text=re.sub(r"^[^\w]+", "", cat.name) or cat.name,
+                callback_data=f"shop_cat_{cat.id}",
+                icon_custom_emoji_id=str(cat_eid),
+            ))
+        else:
+            builder.add(create_button(cat.name, emoji_key="pubg", callback_data=f"shop_cat_{cat.id}"))
     if with_back:
         builder.add(create_button("Orqaga", emoji_key="back", callback_data="menu_back"))
     builder.adjust(1)

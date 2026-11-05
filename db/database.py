@@ -34,6 +34,8 @@ class AsyncSessionFactory:
         engine = create_async_engine(
             config.database_url,
             echo=False,
+            pool_pre_ping=True,
+            pool_recycle=300,
             connect_args={"ssl": ssl_context},
         )
         sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
@@ -58,6 +60,8 @@ ssl_context.verify_mode = ssl.CERT_NONE
 engine = create_async_engine(
     config.database_url,
     echo=False,
+    pool_pre_ping=True,
+    pool_recycle=300,
     connect_args={"ssl": ssl_context},
 )
 

@@ -1,3 +1,4 @@
+from core.config import config
 import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -11,7 +12,7 @@ async def generate_order_number(session: AsyncSession) -> str:
 
     for _ in range(100):
         result = await session.execute(text("SELECT nextval('order_number_seq')"))
-        number = f"ENT-{current_year}-{result.scalar():06d}"
+        number = f"{config.ORDER_PREFIX}-{current_year}-{result.scalar():06d}"
         exists = await session.execute(
             text("SELECT 1 FROM orders WHERE order_number = :n"), {"n": number}
         )
