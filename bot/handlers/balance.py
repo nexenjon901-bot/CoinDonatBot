@@ -92,7 +92,12 @@ def _cancel_keyboard(callback_data: str):
 async def process_balance_amount(message: Message, state: FSMContext, session: AsyncSession):
     text_raw = message.text.replace(" ", "").replace(",", "")
     if not text_raw.isdigit():
-        await message.answer("❌ Iltimos, faqat raqam kiriting!\nMasalan: <code>50000</code>", reply_markup=_cancel_keyboard("balance_back"))
+        from core.emojis import pe
+        await message.answer(
+            f"{pe('cancel')} <b>Noto'g'ri summa</b>\n\n"
+            f"<blockquote>Iltimos, faqat raqam kiriting.\nMasalan: <code>50000</code></blockquote>",
+            reply_markup=_cancel_keyboard("balance_back"),
+        )
         return
 
     amount = int(text_raw)
@@ -100,8 +105,9 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
         from core.emojis import pe
         from core.ui import format_uzs
         await message.answer(
-            f"{pe('warn')} <b>Minimal to'ldirish summasi: {format_uzs(MIN_AMOUNT)} so'm</b>\n"
-            f"Iltimos, qaytadan kiriting:",
+            f"{pe('warn')} <b>Summa juda kam</b>\n\n"
+            f"<blockquote>Minimal to'ldirish summasi: <b>{format_uzs(MIN_AMOUNT)} so'm</b>\n"
+            f"Iltimos, qaytadan kiriting.</blockquote>",
             reply_markup=_cancel_keyboard("balance_back"),
         )
         return
@@ -126,15 +132,18 @@ async def process_balance_amount(message: Message, state: FSMContext, session: A
     phone = phone_obj.value if phone_obj else getattr(config, "PAYMENT_PHONE", "")
 
     from core.emojis import pe
+    phone_line = f"\n{pe('phone')} Ulangan raqam: <code>{phone}</code>" if phone else ""
     text = (
-        f"{pe('card')} <b>To'lov uchun rekvizitlar:</b>\n\n"
-        f"{pe('money')} <b>To'lov summasi: {display_amount}</b>\n"
-        f"{pe('card')} <b>Karta raqami:</b> <code>{card_number}</code>\n"
-        f"{pe('profile')} <b>Karta egasi: {card_owner}\n"
-        f"ULANGAN NUMER {phone}</b>\n\n"
-        f"📥 <b>To'lovni amalga oshirgach:</b>\n"
-        f"Ushbu botga to'lov <b>cheki (skrinshot)</b>ni yuboring. "
-        f"Tekshirilib, hisobingizga darhol mablag' qo'shiladi!"
+        f"{pe('card')} <b>To'lov uchun rekvizitlar</b>\n\n"
+        f"<blockquote>"
+        f"{pe('money')} To'lov summasi: <b>{display_amount}</b>\n"
+        f"{pe('card')} Karta raqami: <code>{card_number}</code>\n"
+        f"{pe('profile')} Karta egasi: <b>{card_owner}</b>"
+        f"{phone_line}"
+        f"</blockquote>\n\n"
+        f"{pe('inbox')} <b>To'lovdan keyin</b>\n"
+        f"<blockquote>Ushbu botga to'lov <b>cheki (skrinshot)</b>ni yuboring. "
+        f"Tekshirilib, hisobingizga mablag' qo'shiladi.</blockquote>"
     )
 
     await message.answer(text, reply_markup=_cancel_keyboard("balance_cancel_state"))
@@ -161,22 +170,28 @@ async def process_balance_receipt(message: Message, state: FSMContext, session: 
 
     await state.clear()
 
+    from core.emojis import pe
     text = (
-        f"✅ <b>Chekingiz qabul qilindi!</b>\n\n"
-        f"💰 So'ralgan miqdor: <b>{display_amount}</b>\n"
-        f"⏳ Admin tekshirib, tez orada balansingizni to'ldiradi.\n\n"
-        f"📦 Balans holati haqida xabar olasiz."
+        f"{pe('verify')} <b>Chekingiz qabul qilindi!</b>\n\n"
+        f"<blockquote>"
+        f"{pe('receipt')} So'rov: <b>#{req.id}</b>\n"
+        f"{pe('money')} Miqdor: <b>{display_amount}</b>\n"
+        f"{pe('pending')} Holat: <b>Tekshirilmoqda</b>"
+        f"</blockquote>\n\n"
+        f"Admin tekshirib, tez orada balansingizni to'ldiradi. Natija haqida shu yerda xabar olasiz."
     )
     await message.answer(text)
 
     # Admin ga xabar yuborish
     buyer = f"@{db_user.username}" if db_user.username else f"ID: {db_user.telegram_id}"
     admin_text = (
-        f"💰 <b>YANGI BALANS SO'ROVI</b>\n\n"
-        f"👤 Foydalanuvchi: {buyer}\n"
-        f"💵 Miqdor: <b>{display_amount}</b>\n"
-        f"🔑 So'rov ID: #{req.id}\n\n"
-        f"Tasdiqlash yoki rad etish uchun admin panelga o'ting."
+        f"{pe('balance')} <b>Yangi balans so'rovi</b>\n\n"
+        f"<blockquote>"
+        f"{pe('profile')} Foydalanuvchi: {buyer}\n"
+        f"{pe('money')} Miqdor: <b>{display_amount}</b>\n"
+        f"{pe('receipt')} So'rov: <b>#{req.id}</b>"
+        f"</blockquote>\n\n"
+        f"Tasdiqlash yoki rad etish uchun quyidagi tugmalardan foydalaning."
     )
     from aiogram import Bot
     bot: Bot = message.bot
@@ -199,6 +214,16 @@ async def process_balance_receipt(message: Message, state: FSMContext, session: 
             await bot.send_message(config.ADMIN_ID, admin_text, reply_markup=admin_builder.as_markup())
     except Exception:
         logger.exception("Failed to send balance request notification to admin")
+
+
+@router.message(BalanceFill.waiting_for_receipt)
+async def waiting_receipt_hint(message: Message):
+    from core.emojis import pe
+    await message.answer(
+        f"{pe('inbox')} <b>To'lov chekini yuboring</b>\n\n"
+        f"<blockquote>Iltimos, to'lov cheki <b>rasmini (skrinshot)</b> yoki faylini yuboring.</blockquote>",
+        reply_markup=_cancel_keyboard("balance_cancel_state"),
+    )
 
 
 @router.callback_query(F.data == "balance_back")

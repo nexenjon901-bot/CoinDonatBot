@@ -1,7 +1,7 @@
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -18,8 +18,13 @@ router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
 
 
-@router.message(F.text == "💰 Balans so'rovlari")
-async def list_balance_requests(message: Message, session: AsyncSession):
+async def _pending_count(session: AsyncSession) -> int:
+    return (await session.execute(
+        select(func.count(BalanceRequest.id)).where(BalanceRequest.status == BalanceRequestStatus.PENDING)
+    )).scalar() or 0
+
+
+async def _next_pending(session: AsyncSession):
     result = await session.execute(
         select(BalanceRequest)
         .options(selectinload(BalanceRequest.user))
@@ -27,16 +32,43 @@ async def list_balance_requests(message: Message, session: AsyncSession):
         .order_by(BalanceRequest.created_at.asc())
         .limit(1)
     )
-    req = result.scalar_one_or_none()
+    return result.scalar_one_or_none()
 
+
+async def _edit_message(callback: CallbackQuery, text: str):
+    """Chek rasmli xabar (caption) ham, matnli xabar ham yangilanadi"""
+    for edit in (
+        lambda: callback.message.edit_caption(caption=text, reply_markup=None),
+        lambda: callback.message.edit_text(text=text, reply_markup=None),
+    ):
+        try:
+            await edit()
+            return
+        except Exception:
+            continue
+    logger.warning("Balans so'rovi xabarini yangilab bo'lmadi")
+
+
+async def _show_next_request(callback: CallbackQuery, session: AsyncSession):
+    """Ko'rib chiqilgan so'rovdan keyin navbatdagisini avtomatik ko'rsatadi"""
+    req = await _next_pending(session)
+    if req:
+        await _send_balance_request(callback.message, req, await _pending_count(session))
+    else:
+        await callback.message.answer("✅ <b>Barcha balans so'rovlari ko'rib chiqildi.</b>")
+
+
+@router.message(F.text == "💰 Balans so'rovlari")
+async def list_balance_requests(message: Message, session: AsyncSession):
+    req = await _next_pending(session)
     if not req:
-        await message.answer("✅ Hozircha kutayotgan balans so'rovlari yo'q.")
+        await message.answer("✅ <b>Balans so'rovlari</b>\n\n<blockquote>Hozircha kutayotgan so'rovlar yo'q.</blockquote>")
         return
 
-    await _send_balance_request(message, req)
+    await _send_balance_request(message, req, await _pending_count(session))
 
 
-async def _send_balance_request(target, req: BalanceRequest):
+async def _send_balance_request(target, req: BalanceRequest, pending: int = 1):
     """So'rovni ko'rsatish"""
     user = req.user
     uname = f"@{user.username}" if user.username else f"ID: {user.telegram_id}"
@@ -48,21 +80,36 @@ async def _send_balance_request(target, req: BalanceRequest):
 
     text = (
         f"💰 <b>Balans so'rovi #{req.id}</b>\n\n"
+        f"<blockquote>"
         f"👤 Foydalanuvchi: {user.first_name or '—'} ({uname})\n"
         f"💵 So'ralgan miqdor: <b>{format_money(req.amount_uzs)}</b>\n"
-        f"📅 Sana: {req.created_at.strftime('%d.%m.%Y %H:%M') if req.created_at else '—'}\n\n"
-        f"Chek rasmini ko'rish uchun yuqoridagi fotoqarang."
+        f"📅 Sana: {req.created_at.strftime('%d.%m.%Y %H:%M') if req.created_at else '—'}\n"
+        f"💳 Joriy balans: {format_money(user.balance or 0)}"
+        f"</blockquote>\n\n"
+        f"⏳ Kutayotgan so'rovlar: <b>{pending} ta</b>"
     )
 
     if isinstance(target, Message):
         if req.receipt_file_id:
-            await target.answer_photo(
-                photo=req.receipt_file_id,
-                caption=text,
-                reply_markup=builder.as_markup()
-            )
-        else:
-            await target.answer(text, reply_markup=builder.as_markup())
+            try:
+                await target.answer_photo(
+                    photo=req.receipt_file_id,
+                    caption=text,
+                    reply_markup=builder.as_markup()
+                )
+                return
+            except Exception:
+                # chek fayl (hujjat) bo'lsa — hujjat sifatida yuboramiz
+                try:
+                    await target.answer_document(
+                        document=req.receipt_file_id,
+                        caption=text,
+                        reply_markup=builder.as_markup()
+                    )
+                    return
+                except Exception:
+                    logger.exception("Chekni yuborib bo'lmadi")
+        await target.answer(text, reply_markup=builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("bal_approve_"))
@@ -94,22 +141,23 @@ async def approve_balance(callback: CallbackQuery, session: AsyncSession, bot: B
         await bot.send_message(
             user.telegram_id,
             f"✅ <b>Balansingiz to'ldirildi!</b>\n\n"
+            f"<blockquote>"
             f"💰 Qo'shilgan miqdor: <b>{format_money(amount_uzs)}</b>\n"
             f"💳 Joriy balans: <b>{format_money(user.balance)}</b>"
+            f"</blockquote>\n\n"
+            f"Xaridlarni boshlashingiz mumkin 🛍"
         )
     except Exception:
         logger.exception("Failed to notify user after balance approval")
 
     uname = f"@{user.username}" if user.username else f"ID: {user.telegram_id}"
-    try:
-        await callback.message.edit_caption(
-            caption=f"✅ <b>Tasdiqlandi!</b>\n\n"
-            f"👤 {uname}\n"
-            f"💰 +{format_money(amount_uzs)} balansi to'ldirildi."
-        )
-    except Exception:
-        logger.exception("Failed to update callback message after balance approval")
+    await _edit_message(
+        callback,
+        f"✅ <b>So'rov #{req_id} tasdiqlandi</b>\n\n"
+        f"<blockquote>👤 {uname}\n💰 +{format_money(amount_uzs)} balansga qo'shildi.</blockquote>",
+    )
     await callback.answer("✅ Tasdiqlandi!")
+    await _show_next_request(callback, session)
 
 
 @router.callback_query(F.data.startswith("bal_reject_"))
@@ -134,20 +182,17 @@ async def reject_balance(callback: CallbackQuery, session: AsyncSession, bot: Bo
     try:
         await bot.send_message(
             user.telegram_id,
-            f"❌ <b>Balans so'rovingiz rad etildi.</b>\n\n"
-            f"💰 Miqdor: {format_money(amount_uzs)}\n\n"
+            f"❌ <b>Balans so'rovingiz rad etildi</b>\n\n"
+            f"<blockquote>💰 Miqdor: <b>{format_money(amount_uzs)}</b>\n"
+            f"Chek tasdiqlanmadi yoki ma'lumotlar mos kelmadi.</blockquote>\n\n"
             f"Savol bo'lsa, qo'llab-quvvatlash bilan bog'laning."
         )
     except Exception:
         logger.exception("Failed to notify user after balance rejection")
 
-    try:
-        await callback.message.edit_caption(
-            caption=f"❌ <b>Rad etildi!</b>\n\nFoydalanuvchiga xabar yuborildi."
-        )
-    except Exception:
-        logger.exception("Failed to update callback message after balance rejection")
-        await callback.message.edit_text(
-            text=f"❌ <b>Rad etildi!</b>\n\nFoydalanuvchiga xabar yuborildi."
-        )
+    await _edit_message(
+        callback,
+        f"❌ <b>So'rov #{req_id} rad etildi</b>\n\n<blockquote>Foydalanuvchiga xabar yuborildi.</blockquote>",
+    )
     await callback.answer("❌ Rad etildi!")
+    await _show_next_request(callback, session)
