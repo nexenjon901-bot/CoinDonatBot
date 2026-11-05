@@ -14,7 +14,7 @@ from core.config import config
 
 router = Router()
 
-MAIN_MENU_BANNER = "bot/images/menu_v2.png"
+MAIN_MENU_BANNER = "bot/images/menu_v3.png"
 
 
 def get_main_menu_keyboard(_: Callable[[str], str], is_admin: bool = False):

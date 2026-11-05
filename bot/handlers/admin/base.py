@@ -38,11 +38,12 @@ def get_admin_keyboard() -> ReplyKeyboardMarkup:
          KeyboardButton(text="📂 Kategoriyalar")],
         [KeyboardButton(text="💰 Balans so'rovlari"),
          KeyboardButton(text="🛒 Buyurtmalar")],
-        [KeyboardButton(text="🌟 Premium Emojilar"),
-         KeyboardButton(text="⚙️ Sozlamalar")],
-        [KeyboardButton(text="� Qidirish"),
-         KeyboardButton(text="�📢 Xabar yuborish")],
-        [KeyboardButton(text="⬅️ Bosh menyuga")],
+        [KeyboardButton(text="📦 Ombor holati"),
+         KeyboardButton(text="🌟 Premium Emojilar")],
+        [KeyboardButton(text="⚙️ Sozlamalar"),
+         KeyboardButton(text="🔍 Qidirish")],
+        [KeyboardButton(text="📢 Xabar yuborish"),
+         KeyboardButton(text="⬅️ Bosh menyuga")],
     ]
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
@@ -105,11 +106,24 @@ async def show_statistics(message: Message, session: AsyncSession):
         select(func.count(BalanceRequest.id)).where(BalanceRequest.status == BalanceRequestStatus.PENDING)
     )).scalar() or 0
 
-    total_products = (await session.execute(select(func.count(Product.id)))).scalar() or 0
-    
-    # O'rtacha buyurtma qiymati
-    avg_order = (total_revenue / total_orders) if total_orders > 0 else 0
-    
+    total_products = (await session.execute(
+        select(func.count(Product.id)).where(Product.is_active.is_(True))
+    )).scalar() or 0
+
+    new_users = (await session.execute(
+        select(func.count(User.id)).where(User.created_at >= day_ago)
+    )).scalar() or 0
+
+    users_balance = (await session.execute(
+        select(func.coalesce(func.sum(User.balance), 0))
+    )).scalar() or 0
+
+    waiting_delivery = (await session.execute(
+        select(func.count(Order.id)).where(Order.status == OrderStatus.APPROVED)
+    )).scalar() or 0
+
+    avg_check = float(total_revenue) / total_orders if total_orders else 0
+
     # Faol foydalanuvchilar (so'nggi 7 kun ichida xarid qilganlar)
     active_users = (await session.execute(
         select(func.count(func.distinct(Order.user_id))).where(
@@ -118,17 +132,26 @@ async def show_statistics(message: Message, session: AsyncSession):
 
     text = (
         f"📊 <b>Bot Statistikasi</b>\n\n"
-        f"👥 Jami foydalanuvchilar: <b>{total_users} ta</b>\n"
-        f"� Faol foydalanuvchilar (7 kun): <b>{active_users} ta</b>\n"
-        f"�🛒 Bajarilgan buyurtmalar: <b>{total_orders} ta</b>\n\n"
-        f"💰 <b>Daromadlar:</b>\n"
+        f"<blockquote>"
+        f"👥 Foydalanuvchilar: <b>{total_users} ta</b> (24 soatda: +{new_users})\n"
+        f"🔥 Faol (7 kun): <b>{active_users} ta</b>\n"
+        f"🛒 Bajarilgan buyurtmalar: <b>{total_orders} ta</b>\n"
+        f"🧾 O'rtacha chek: <b>{avg_check:,.0f} so'm</b>\n"
+        f"💳 Foydalanuvchilar balansi: <b>{float(users_balance):,.0f} so'm</b>"
+        f"</blockquote>\n\n"
+        f"💰 <b>Daromadlar</b>\n"
+        f"<blockquote>"
         f"• Kunlik (24 soat): <b>{float(daily_rev):,.0f} so'm</b>\n"
         f"• Haftalik (7 kun): <b>{float(weekly_rev):,.0f} so'm</b>\n"
         f"• Oylik (30 kun): <b>{float(monthly_rev):,.0f} so'm</b>\n"
-        f"• Jami aylanma: <b>{float(total_revenue):,.0f} so'm</b>\n"
-        f"• O'rtacha buyurtma: <b>{float(avg_order):,.0f} so'm</b>\n\n"
-        f"🛍 Faol mahsulotlar: <b>{total_products} ta</b>\n"
-        f"⏳ Kutilayotgan to'lov cheklari: <b>{pending_balance} ta</b>"
+        f"• Jami aylanma: <b>{float(total_revenue):,.0f} so'm</b>"
+        f"</blockquote>\n\n"
+        f"⏳ <b>Kutilmoqda</b>\n"
+        f"<blockquote>"
+        f"• To'lov cheklari: <b>{pending_balance} ta</b>\n"
+        f"• Yetkazilishi kerak (UC): <b>{waiting_delivery} ta</b>\n"
+        f"• Faol mahsulotlar: <b>{total_products} ta</b>"
+        f"</blockquote>"
     )
 
     builder = InlineKeyboardBuilder()
@@ -136,6 +159,40 @@ async def show_statistics(message: Message, session: AsyncSession):
     builder.button(text="🔄 Yangilash", callback_data="adm_stats_refresh")
     builder.adjust(1)
     await message.answer(text, reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data == "adm_stats_refresh")
+async def refresh_statistics(callback: CallbackQuery, session: AsyncSession):
+    await callback.message.delete()
+    await show_statistics(callback.message, session)
+    await callback.answer("🔄 Yangilandi")
+
+
+@router.message(F.text == "📦 Ombor holati")
+async def show_stock_status(message: Message, session: AsyncSession):
+    """Har bir mahsulot bo'yicha ombordagi qoldiq; kam qolganlari ogohlantiriladi"""
+    from db.models.stock_item import StockItem, StockItemStatus
+
+    rows = (await session.execute(
+        select(Product.name, Product.product_type, func.count(StockItem.id))
+        .outerjoin(StockItem, (StockItem.product_id == Product.id) & (StockItem.status == StockItemStatus.AVAILABLE))
+        .where(Product.is_active.is_(True))
+        .group_by(Product.id, Product.name, Product.product_type)
+        .order_by(Product.name)
+    )).all()
+
+    lines, low = [], 0
+    for name, ptype, cnt in rows:
+        if ptype == "uc":
+            lines.append(f"💎 {name}: <b>cheksiz</b>")
+            continue
+        mark = "🔴" if cnt == 0 else ("🟡" if cnt <= 3 else "🟢")
+        low += 1 if cnt <= 3 else 0
+        lines.append(f"{mark} {name}: <b>{cnt} ta</b>")
+
+    body = "\n".join(lines) if lines else "Mahsulotlar yo'q."
+    footer = f"\n\n⚠️ Kam qolgan yoki tugagan: <b>{low} ta</b>" if low else "\n\n✅ Ombor yetarli."
+    await message.answer(f"📦 <b>Ombor holati</b>\n\n<blockquote>{body}</blockquote>{footer}")
 
 
 @router.callback_query(F.data == "adm_tx_history")

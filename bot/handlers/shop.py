@@ -26,8 +26,8 @@ from services.orders import generate_order_number
 
 router = Router()
 
-SHOP_BANNER = "bot/images/shop_v2.png"
-PRODUCT_BANNER = "bot/images/shop_v2.png"  # product_detail.png o'rniga shop_v2.png
+SHOP_BANNER = "bot/images/shop_v3.png"
+PRODUCT_BANNER = "bot/images/shop_v3.png"  # product_detail.png o'rniga shop_v2.png
 
 
 def _shop_text() -> str:
@@ -211,10 +211,12 @@ async def start_purchase(callback: CallbackQuery, state: FSMContext, session: As
         await state.set_state(UCCheckout.waiting_for_player_id)
         msg_text = (
             f"💎 <b>{prod.name}</b> xaridi\n\n"
+            f"<blockquote>"
             f"💰 Narxi: <b>{format_money(price)} ({price_usd})</b>\n"
             f"💳 Balansingiz: <b>{format_money(balance)}</b>\n\n"
             f"🎮 <b>PUBG Mobile Player ID raqamingizni yuboring:</b>\n"
-            f"<i>(Masalan: 5123456789)</i>\n\n"
+            f"<i>(Masalan: 5123456789)</i>"
+            f"</blockquote>\n\n"
             f"❌ Bekor qilish uchun: /cancel"
         )
         try:
@@ -226,10 +228,12 @@ async def start_purchase(callback: CallbackQuery, state: FSMContext, session: As
 
     text = (
         f"🛍 <b>Xarid tasdiqlash</b>\n\n"
+        f"<blockquote>"
         f"🎮 <b>{prod.name}</b>\n"
         f"💰 Narxi: <b>{format_money(price)} ({price_usd})</b>\n"
-        f"💳 Sizning balansingiz: <b>{format_money(balance)}</b>\n\n"
-        f"Xaridni tasdiqlaysizmi?"
+        f"💳 Sizning balansingiz: <b>{format_money(balance)}</b>"
+        f"</blockquote>\n\n"
+        f"<i>Xaridni tasdiqlaysizmi?</i>"
     )
 
     keyboard = get_purchase_confirm_keyboard(prod_id)
@@ -266,12 +270,14 @@ async def process_player_id(message: Message, state: FSMContext, session: AsyncS
 
     confirm_text = (
         f"💎 <b>UC Xaridini tasdiqlash</b>\n\n"
+        f"<blockquote>"
         f"🎮 Mahsulot: <b>{prod.name}</b>\n"
         f"🆔 PUBG Player ID: <code>{player_id}</code>\n"
         f"💰 Narxi: <b>{format_money(price)}</b>\n"
-        f"💳 Sizning balansingiz: <b>{format_money(balance)}</b>\n\n"
-        f"⚠️ <i>Player ID to'g'ri kiritilganiga ishonch hosil qiling!</i>\n\n"
-        f"Xaridni tasdiqlaysizmi?"
+        f"💳 Sizning balansingiz: <b>{format_money(balance)}</b>"
+        f"</blockquote>\n\n"
+        f"⚠️ <i>Player ID to'g'ri kiritilganiga ishonch hosil qiling!</i>\n"
+        f"<i>Xaridni tasdiqlaysizmi?</i>"
     )
 
     await message.answer(confirm_text, reply_markup=get_uc_confirm_keyboard(prod.id))
@@ -359,12 +365,14 @@ async def confirm_uc_purchase(callback: CallbackQuery, state: FSMContext, sessio
     # 4. Foydalanuvchiga xabar
     text_msg = (
         f"✅ <b>Buyurtmangiz qabul qilindi!</b>\n\n"
+        f"<blockquote>"
         f"🧾 Buyurtma: <code>{order_num}</code>\n"
         f"💎 Mahsulot: <b>{prod.name}</b>\n"
         f"🆔 Player ID: <code>{player_id}</code>\n"
-        f"💰 To'landi: <b>{format_money(price)}</b>\n\n"
-        f"⚡️ <b>UC tez orada hisobingizga tushiriladi!</b>\n"
+        f"💰 To'landi: <b>{format_money(price)}</b>\n"
         f"💳 Qolgan balans: <b>{format_money(db_user.balance)}</b>"
+        f"</blockquote>\n\n"
+        f"⚡️ <b>UC tez orada hisobingizga tushiriladi!</b>"
     )
 
     try:
@@ -534,30 +542,41 @@ async def confirm_purchase(callback: CallbackQuery, session: AsyncSession, db_us
         
     text_msg = (
         f"✅ <b>Xarid muvaffaqiyatli!</b>\n\n"
+        f"<blockquote>"
         f"🧾 Buyurtma: <code>{order_num}</code>\n"
         f"🎮 Mahsulot: <b>{prod_name}</b>\n"
-        f"💰 To'landi: <b>{format_money(price)}</b>\n\n"
-        f"🔑 <b>Sizning ma'lumotlaringiz:</b>\n"
-        f"<code>{decrypted_data}</code>\n\n"
+        f"💰 To'landi: <b>{format_money(price)}</b>\n"
         f"💳 Qolgan balans: <b>{format_money(db_user.balance)}</b>"
+        f"</blockquote>\n\n"
+        f"🔑 <b>Sizning ma'lumotlaringiz:</b>\n"
+        f"<code>{decrypted_data}</code>"
     )
 
-    try:
-        await callback.message.edit_caption(caption=text_msg, reply_markup=None)
-    except Exception:
+    delivered = False
+    for send in (
+        lambda: callback.message.edit_text(text=text_msg, reply_markup=None),
+        lambda: callback.message.edit_caption(caption=text_msg, reply_markup=None),
+        lambda: callback.message.answer(text_msg),
+    ):
         try:
-            await callback.message.edit_text(text=text_msg, reply_markup=None)
+            await send()
+            delivered = True
+            break
         except Exception:
-            # Telegram yetkazish xatosi (foydalanuvchi bloklagan yoki chat topilmadi)
-            await session.execute(text("UPDATE orders SET status = 'DELIVERY_FAILED' WHERE id = :oid"), {"oid": order.id})
-            await session.commit()
-            
-            from core.config import config as _config
-            try:
-                await callback.bot.send_message(_config.ADMIN_ID, f"⚠️ <b>YETKAZISH XATOSI</b>\nBuyurtma: <code>{order_num}</code>\nXaridorga ma'lumot yetib bormadi (bloklagan bo'lishi mumkin).")
-            except Exception:
-                pass
-                
+            continue
+
+    if not delivered:
+        # Telegram yetkazish xatosi (foydalanuvchi bloklagan yoki chat topilmadi)
+        from core.config import config as _config
+        try:
+            await callback.bot.send_message(
+                _config.ADMIN_ID,
+                f"⚠️ <b>YETKAZISH XATOSI</b>\nBuyurtma: <code>{order_num}</code>\n"
+                f"Xaridorga ma'lumot yetib bormadi (bloklagan bo'lishi mumkin).",
+            )
+        except Exception:
+            pass
+
     try:
         await callback.answer("✅ Ma'lumot yetkazildi!")
     except Exception:
@@ -589,16 +608,6 @@ async def shop_noop(callback: CallbackQuery):
 
 @router.callback_query(F.data == "shop_back_main")
 async def back_to_main(callback: CallbackQuery):
-    from bot.handlers.registration import get_main_menu_keyboard
-    from core.config import config
-    is_admin = callback.from_user.id == config.ADMIN_ID
-
-    text = (
-        "👋 <b>Asosiy menyu</b>\n\n"
-        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
-    )
-    try:
-        await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
-    except Exception:
-        await callback.message.edit_text(text=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
+    from core.ui import show_main_menu
+    await show_main_menu(callback)
     await callback.answer()

@@ -24,6 +24,8 @@ from bot.handlers.profile import router as profile_router
 from bot.handlers.referral import router as referral_router
 from bot.handlers.useful import router as useful_router
 from bot.handlers.admin import router as admin_router
+from bot.handlers.errors import router as errors_router
+from bot.middlewares.callback_guard import CallbackGuardMiddleware
 
 
 async def start_bot():
@@ -46,8 +48,10 @@ async def start_bot():
     dp = Dispatcher()
     dp.update.outer_middleware(DbSessionMiddleware(async_session))
     dp.update.outer_middleware(I18nMiddleware())
+    dp.callback_query.outer_middleware(CallbackGuardMiddleware())
 
     # Routerlar
+    dp.include_router(errors_router)
     dp.include_router(reg_router)
     dp.include_router(shop_router)
     dp.include_router(balance_router)

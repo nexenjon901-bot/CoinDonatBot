@@ -14,7 +14,7 @@ from core.utils import format_money, premium_emoji, order_status_label
 
 router = Router()
 
-PROFILE_BANNER = "bot/images/profile_v2.png"
+PROFILE_BANNER = "bot/images/profile_v3.png"
 
 # Audit USD rate fix: kurs ≈ 11 880 so'm/$
 USD_RATE = 11_880

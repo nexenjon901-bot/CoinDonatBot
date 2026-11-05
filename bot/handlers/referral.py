@@ -9,7 +9,7 @@ from core.config import config
 
 router = Router()
 
-REFERRAL_BANNER = "bot/images/referral_v2.png"
+REFERRAL_BANNER = "bot/images/referral_v3.png"
 
 
 from core.utils import format_money
@@ -102,12 +102,14 @@ async def show_referral(message: Message, session: AsyncSession, db_user: User):
     earned = format_money(db_user.ref_balance)
     text = (
         f"🎁 <b>Referal tizimi</b>\n\n"
+        f"<blockquote>"
         f"🔗 <b>Sizning taklif havolangiz:</b>\n"
         f"<code>https://t.me/{bot_username}?start={db_user.referral_code}</code>\n\n"
         f"📊 <b>Statistikangiz:</b>\n"
         f"• Jami takliflar: {ref_count} ta\n"
-        f"• Tasdiqlangan: {confirmed_count} ta  \n"
-        f"• Ishlangan summa: {earned} so'm\n\n"
+        f"• Tasdiqlangan: {confirmed_count} ta\n"
+        f"• Ishlangan summa: {earned} so'm"
+        f"</blockquote>\n\n"
         f"<i>Har bir do'stingiz xavfsizlik tekshiruvidan o'tgach hisobingizga bonus beriladi.</i>"
     )
 
@@ -119,39 +121,20 @@ async def show_referral(message: Message, session: AsyncSession, db_user: User):
     builder.button(text="↗️ Do'stlarga ulashish", url=share_url)
 
     if float(db_user.ref_balance or 0) >= await _get_min_withdrawal(session):
-        builder.button(text="� Asosiy balansga o'tkazish", callback_data="ref_withdraw")
+        builder.button(text="💸 Asosiy balansga o'tkazish", callback_data="ref_withdraw")
     builder.button(text="↩️ Orqaga", callback_data="menu_back")
     builder.adjust(1)
 
-    from core.ui import answer_with_banner
-    await answer_with_banner(message, REFERRAL_BANNER, text, builder.as_markup())
+    from core.ui import answer_with_banner, show_page
+    if isinstance(message, CallbackQuery):
+        await show_page(message, text, builder.as_markup(), REFERRAL_BANNER)
+    else:
+        await answer_with_banner(message, REFERRAL_BANNER, text, builder.as_markup())
 
-    try:
-        if isinstance(message, CallbackQuery):
-            await message.message.edit_text(text, reply_markup=builder.as_markup())
-        else:
-            await message.answer(text, reply_markup=builder.as_markup())
-    except Exception:
-        try:
-            await message.edit_text(text, reply_markup=builder.as_markup())
-        except Exception:
-            await message.answer(text, reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "menu_back_main")
 async def ref_back_main(callback: CallbackQuery):
     from bot.handlers.registration import get_main_menu_keyboard
-    from core.config import config
-    is_admin = callback.from_user.id == config.ADMIN_ID
-    text = (
-        "👋 <b>Asosiy menyu</b>\n\n"
-        "<blockquote>Bu PUBG Mobile va o'yin akkauntlari do'koni boti! "
-        "Kerakli bo'limni tanlang va qulay xarid qiling.</blockquote>"
-    )
-    try:
-        await callback.message.edit_text(text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
-    except Exception:
-        try:
-            await callback.message.edit_caption(caption=text, reply_markup=get_main_menu_keyboard(lambda x: x, is_admin=is_admin))
-        except Exception:
-            pass
+    from core.ui import show_main_menu
+    await show_main_menu(callback)
     await callback.answer()
